@@ -329,7 +329,7 @@ export default function CallTrackingCard({
                 className="text-surface-light h-9"
                 onClose={() => onRemoveTeamFromCall(call.id, team)}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2" data-testid={`team-chip-${team}`}>
                   <span className="font-medium">{team}</span>
                   <Dropdown placement="bottom-end" offset={2}>
                     <DropdownTrigger>

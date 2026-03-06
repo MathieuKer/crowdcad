@@ -185,7 +185,8 @@ export const CallTrackingTable: React.FC<CallTrackingTableProps> = ({
               isIconOnly
               size="md"
               variant="flat"
-              aria-label="Add Team or Supervisor"
+              aria-label="Add Call"
+              data-testid="add-call-button"
               onPress={() => setShowQuickCallForm(true)}
             >
               <Plus className="h-5 w-5" />
@@ -384,7 +385,7 @@ export const CallTrackingTable: React.FC<CallTrackingTableProps> = ({
                                   className="text-surface-light h-9"
                                   onClose={() => handleRemoveTeamFromCall(call.id, team)}
                                 >
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2" data-testid={`team-chip-${team}`}>
                                     <span>{team}</span>
                                     <Dropdown>
                                       <DropdownTrigger>

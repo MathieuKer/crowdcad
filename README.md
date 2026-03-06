@@ -55,6 +55,43 @@ cp .env.example .env.local
 ```
 
 
+#### Testing
+
+The E2E suite uses Playwright BDD with Firebase emulators. The test runner starts the emulators and a production build of Next.js automatically — no manual server setup required.
+
+**Prerequisites**
+
+- [Firebase CLI](https://firebase.google.com/docs/cli) installed globally (`npm install -g firebase-tools`)
+- Playwright browsers installed: `npx playwright install --with-deps chromium`
+
+**First-time setup**
+
+```bash
+cp .env.test.local.example .env.test.local
+# .env.test.local already contains working defaults for the emulator — no edits needed
+```
+
+**Run the full suite**
+
+```bash
+npm run test:e2e
+```
+
+This runs `bddgen` (generates Playwright spec files from the `.feature` files) then `playwright test`. The emulators and app server start and stop automatically.
+
+**Other modes**
+
+```bash
+npm run test:e2e:ui     # Playwright UI — interactive test explorer
+npm run test:e2e:debug  # Step through tests with the Playwright inspector
+```
+
+After a run, an HTML report is generated in `playwright-report/`. Open it with:
+
+```bash
+npx playwright show-report
+```
+
 #### When to read the other docs
 
 - Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before making cross-cutting changes.

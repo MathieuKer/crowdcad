@@ -5,7 +5,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getAuth } from 'firebase/auth';
+import { useAuth } from '@/hooks/useauth';
 import { db } from '@/app/firebase';
 import { addDoc, collection, doc, getDoc, updateDoc } from 'firebase/firestore';
 import {
@@ -57,9 +57,9 @@ export default function VenueManagementPageClient() {
   const searchParams = useSearchParams();
   const venueId = searchParams.get('venueId');
   // Firebase
-  const auth = useMemo(() => getAuth(), []);
+  const { user } = useAuth();
+  const userId = user?.uid;
   const storage = useMemo(() => getStorage(), []);
-  const userId = auth.currentUser?.uid;
 
   // Local state
   const [venueData, setVenueData] = useState<{
@@ -761,6 +761,7 @@ export default function VenueManagementPageClient() {
             type="file"
             accept="image/*"
             className="hidden"
+            data-testid="map-file-input"
             onChange={(e) => {
               setMapFile(e.target.files?.[0] ?? null);
               setPendingLayer(currentLayer);
@@ -1277,6 +1278,7 @@ export default function VenueManagementPageClient() {
                             isIconOnly
                             size="sm"
                             variant="flat"
+                            data-testid="add-layer-button"
                             onPress={() => setIsNewLayerModalOpen(true)}
                           >
                             <Plus className="h-4 w-4" />

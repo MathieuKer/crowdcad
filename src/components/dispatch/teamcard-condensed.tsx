@@ -153,7 +153,7 @@ export default function TeamCardCondensed({
   }, [staff.members]);
 
   return (
-    <Card className={`rounded-xl shadow-sm border-0 ${bg}`}>
+    <Card className={`rounded-xl shadow-sm border-0 ${bg}`} data-testid={`team-card-condensed-${staff.team}`}>
       {/* COLLAPSED HEADER - Single compact line */}
       <CardHeader
         onClick={() => setExpanded(v => !v)}

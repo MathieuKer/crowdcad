@@ -1,12 +1,17 @@
 {
   "name": "dispatch-app",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "bddgen": "bddgen",
+    "test:e2e": "bddgen && playwright test",
+    "test:e2e:ui": "bddgen && playwright test --ui",
+    "test:e2e:debug": "bddgen && playwright test --debug",
+    "test:e2e:serve": "concurrently --names \"emulator,nextjs\" --kill-others-on-fail \"npx firebase emulators:start --only auth,firestore --project demo-crowdcad\" \"cross-env NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true NEXT_PUBLIC_USE_FIRESTORE_EMULATOR=true NEXT_PUBLIC_FIREBASE_API_KEY=fake-api-key NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=localhost NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-crowdcad NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=demo-crowdcad.appspot.com NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=000000000000 NEXT_PUBLIC_FIREBASE_APP_ID=1:000000000000:web:fake next dev\""
   },
   "dependencies": {
     "@heroui/react": "^2.8.5",
@@ -39,17 +44,24 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.58.2",
     "@types/lodash.isequal": "^4.5.8",
     "@types/node": "20.19.1",
     "@types/nodemailer": "^7.0.1",
     "@types/react": "19.1.8",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
     "daisyui": "^5.3.7",
+    "dotenv": "^17.3.1",
     "eslint": "^9",
     "eslint-config-next": "^15.5.7",
+    "firebase-tools": "^15.8.0",
+    "playwright-bdd": "^8.4.2",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
-    "typescript": "5.8.3"
+    "typescript": "5.8.3",
+    "wait-on": "^9.0.4"
   }
 }
