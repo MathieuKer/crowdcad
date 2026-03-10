@@ -12,7 +12,7 @@ export function useDataCollection({ eventId, enabled = true }: UseDataCollection
   const sessionRef = useRef<InteractionSession | null>(null);
 
   const generateSessionId = () => {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `session_${Date.now()}_${crypto.randomUUID()}`;
   };
 
   const initializeSession = useCallback(() => {
@@ -52,11 +52,11 @@ export function useDataCollection({ eventId, enabled = true }: UseDataCollection
 
     try {
       sessionRef.current.endTime = Date.now();
-      
+
       await updateDoc(doc(db, 'events', eventId), {
         interactionSessions: arrayUnion(sessionRef.current)
       });
-      
+
     } catch (error) {
       console.error('Error saving interaction session:', error);
     }
@@ -64,7 +64,7 @@ export function useDataCollection({ eventId, enabled = true }: UseDataCollection
 
   const exportData = useCallback(() => {
     if (!sessionRef.current) return null;
-    
+
     return {
       ...sessionRef.current,
       exportedAt: Date.now()
@@ -105,7 +105,7 @@ export function useDataCollection({ eventId, enabled = true }: UseDataCollection
       document.removeEventListener('keydown', handleKeyDown, true);
       clearInterval(saveInterval);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      
+
       // Final save
       saveSession();
     };

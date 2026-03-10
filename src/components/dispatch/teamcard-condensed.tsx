@@ -1,13 +1,13 @@
 // teamcard-condensed.tsx — Compact version of teamcard
 'use client';
 
-import React, {useEffect, useMemo, useState, useRef} from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Card, CardHeader, CardBody, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem,
   Select, SelectItem, Autocomplete, AutocompleteItem, Textarea
 } from '@heroui/react';
-import {MoreVertical} from 'lucide-react';
-import type {Event, Staff} from '@/app/types';
+import { MoreVertical } from 'lucide-react';
+import type { Event, Staff } from '@/app/types';
 
 type TeamCardCondensedProps = {
   staff: Staff;
@@ -35,42 +35,27 @@ function useMMSS(since?: number) {
   return `${mm}:${ss}`;
 }
 
-function getLeadNameCert(staff: Staff) {
-  const isSupervisor =
-    Array.isArray(staff.members) &&
-    staff.members.length === 1 &&
-    typeof staff.members[0] === 'string' &&
-    !staff.members[0].includes('(Lead)');
 
-  if (isSupervisor) {
-    const m = staff.members?.[0] ?? '';
-    const rx = m.match(/^(.+?)\s\[(.+?)\]/);
-    return { name: rx?.[1] ?? m, cert: rx?.[2] ?? '' };
-  }
-  const lead = (staff.members || []).find(m => typeof m === 'string' && m.includes('(Lead)')) || '';
-  const rx = lead.match(/^(.+?)\s\[(.+?)\]/);
-  return { name: rx?.[1] ?? 'No Lead', cert: rx?.[2] ?? '' };
-}
 
 function teamBg(status: string, event: Event, team: string) {
   // Check if team is assisting with equipment (orange)
   const onEqRun =
     !!event.calls?.some(c =>
-      c.equipmentTeams?.includes(team) && !['Resolved','Delivered','Delivered Eq','Refusal','NMM'].includes(c.status)
+      c.equipmentTeams?.includes(team) && !['Resolved', 'Delivered', 'Delivered Eq', 'Refusal', 'NMM'].includes(c.status)
     ) || ['En Route Eq', 'Assisting'].includes(status);
-  
+
   if (onEqRun) return 'bg-status-orange/15';
-  
+
   // Check if team is on active patient care call (red)
   const activeCare =
     !!event.calls?.some(c =>
-      c.assignedTeam?.includes(team) && !['Resolved','Delivered','Delivered Eq','Refusal','NMM'].includes(c.status)
+      c.assignedTeam?.includes(team) && !['Resolved', 'Delivered', 'Delivered Eq', 'Refusal', 'NMM'].includes(c.status)
     );
-  
+
   if (activeCare) return 'bg-[#2d2123]';
-  
-  if (['On Break','In Clinic'].includes(status)) return 'bg-status-blue/20';
-  
+
+  if (['On Break', 'In Clinic'].includes(status)) return 'bg-status-blue/20';
+
   return 'bg-surface-deep';
 }
 
@@ -89,7 +74,7 @@ export default function TeamCardCondensed({
   });
   const logFocusedRef = useRef(false);
   const lastValidLocation = useRef<string | undefined>(undefined);
-  
+
   // Sync log text from props when not focused (prevents overwriting user edits)
   useEffect(() => {
     if (!logFocusedRef.current) {
@@ -99,35 +84,35 @@ export default function TeamCardCondensed({
       setLogText(newText);
     }
   }, [staff.log]);
-  
+
   useEffect(() => {
     if (staff.location && staff.location !== 'Clinic') {
       lastValidLocation.current = staff.location;
     }
   }, [staff.location]);
-  
+
   const [locationInput, setLocationInput] = useState(staff.location || '');
   useEffect(() => {
     setLocationInput(staff.location || '');
   }, [staff.location]);
-  
-  const {name, cert} = useMemo(() => getLeadNameCert(staff), [staff]);
+
   const timer = useMMSS(sinceMs);
 
   // Status options
   const isOnAnyActiveCall = !!event.calls?.some(c =>
-    c.assignedTeam?.includes(staff.team) && !['Resolved','Delivered','Refusal','NMM'].includes(c.status)
+    c.assignedTeam?.includes(staff.team) && !['Resolved', 'Delivered', 'Refusal', 'NMM'].includes(c.status)
   );
 
-  const isOnEq = !!event.calls?.some(c => 
-    c.equipmentTeams?.includes(staff.team) && !['Resolved','Delivered Eq','Refusal','NMM'].includes(c.status)
+  const isOnEq = !!event.calls?.some(c =>
+    c.equipmentTeams?.includes(staff.team) && !['Resolved', 'Delivered Eq', 'Refusal', 'NMM'].includes(c.status)
   ) || ['En Route Eq', 'Assisting'].includes(staff.status);
 
-  const statusOptions = isOnEq
-    ? ['En Route Eq', 'Assisting', 'Delivered Eq']
-    : isOnAnyActiveCall
-      ? ['En Route', 'On Scene', 'Transporting']
-      : ['Available', 'On Break', 'In Clinic'];
+  let statusOptions = ['Available', 'On Break', 'In Clinic'];
+  if (isOnEq) {
+    statusOptions = ['En Route Eq', 'Assisting', 'Delivered Eq'];
+  } else if (isOnAnyActiveCall) {
+    statusOptions = ['En Route', 'On Scene', 'Transporting'];
+  }
 
   const postOptions: string[] = React.useMemo(() => {
     const base: string[] = ['Clinic'];
@@ -218,15 +203,15 @@ export default function TeamCardCondensed({
                   const val = Array.from(keys as Set<string>)[0] || '';
                   if (val) {
                     if (val === 'Available') {
-                      const targetLocation = 
-                        staff.originalPost || 
-                        event.pendingAssignments?.[staff.team]?.post || 
+                      const targetLocation =
+                        staff.originalPost ||
+                        event.pendingAssignments?.[staff.team]?.post ||
                         lastValidLocation.current;
 
                       if (targetLocation && targetLocation !== staff.location) {
                         onLocationChange(staff, targetLocation);
                       } else if (staff.location === 'Clinic') {
-                        onLocationChange(staff, ''); 
+                        onLocationChange(staff, '');
                       }
                     }
                     onStatusChange(staff, val);
@@ -242,7 +227,7 @@ export default function TeamCardCondensed({
                 ))}
               </Select>
             </div>
-            
+
             {/* Location */}
             <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="col-span-3">
               <Autocomplete
@@ -309,7 +294,7 @@ export default function TeamCardCondensed({
                 )}
               </div>
             </div>
-            
+
             {/* Timer on right */}
             <div className="flex-shrink-0">
               <div className="text-xs font-semibold text-surface-light mb-1">Timer</div>
@@ -335,8 +320,8 @@ export default function TeamCardCondensed({
                   timestamp: Date.now(),
                   message: line
                 }));
-                
-                const updatedStaff = event.staff.map(s => 
+
+                const updatedStaff = event.staff.map(s =>
                   s.team === staff.team ? { ...s, log: newLog } : s
                 );
                 await updateEvent({ staff: updatedStaff });

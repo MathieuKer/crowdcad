@@ -1,13 +1,13 @@
 // teamcard.tsx — REPLACE component export with this version
 'use client';
 
-import React, {useEffect, useMemo, useState, useRef} from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Card, CardHeader, CardBody, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem,
   Select, SelectItem, Autocomplete, AutocompleteItem, Textarea
 } from '@heroui/react';
-import {MoreVertical} from 'lucide-react';
-import type {Event, Staff} from '@/app/types';
+import { MoreVertical } from 'lucide-react';
+import type { Event, Staff } from '@/app/types';
 
 type TeamCardProps = {
   staff: Staff;
@@ -56,21 +56,21 @@ function teamBg(status: string, event: Event, team: string) {
   // Check if team is assisting with equipment (orange)
   const onEqRun =
     !!event.calls?.some(c =>
-      c.equipmentTeams?.includes(team) && !['Resolved','Delivered','Delivered Eq','Refusal','NMM'].includes(c.status)
+      c.equipmentTeams?.includes(team) && !['Resolved', 'Delivered', 'Delivered Eq', 'Refusal', 'NMM'].includes(c.status)
     ) || ['En Route Eq', 'Assisting'].includes(status);
-  
+
   if (onEqRun) return 'bg-status-orange/15';
-  
+
   // Check if team is on active patient care call (red)
   const activeCare =
     !!event.calls?.some(c =>
-      c.assignedTeam?.includes(team) && !['Resolved','Delivered','Delivered Eq','Refusal','NMM'].includes(c.status)
+      c.assignedTeam?.includes(team) && !['Resolved', 'Delivered', 'Delivered Eq', 'Refusal', 'NMM'].includes(c.status)
     );
-  
+
   if (activeCare) return 'bg-[#2d2123]';
-  
-  if (['On Break','In Clinic'].includes(status)) return 'bg-status-blue/20';
-  
+
+  if (['On Break', 'In Clinic'].includes(status)) return 'bg-status-blue/20';
+
   return 'bg-surface-deep';
 }
 
@@ -107,23 +107,24 @@ export default function TeamCard({
   useEffect(() => {
     setLocationInput(staff.location || '');
   }, [staff.location]);
-  const {name, cert} = useMemo(() => getLeadNameCert(staff), [staff]);
+  const { name, cert } = useMemo(() => getLeadNameCert(staff), [staff]);
   const timer = useMMSS(sinceMs);
 
   // Status options
   const isOnAnyActiveCall = !!event.calls?.some(c =>
-    c.assignedTeam?.includes(staff.team) && !['Resolved','Delivered','Refusal','NMM'].includes(c.status)
+    c.assignedTeam?.includes(staff.team) && !['Resolved', 'Delivered', 'Refusal', 'NMM'].includes(c.status)
   );
 
-  const isOnEq = !!event.calls?.some(c => 
-    c.equipmentTeams?.includes(staff.team) && !['Resolved','Delivered Eq','Refusal','NMM'].includes(c.status)
+  const isOnEq = !!event.calls?.some(c =>
+    c.equipmentTeams?.includes(staff.team) && !['Resolved', 'Delivered Eq', 'Refusal', 'NMM'].includes(c.status)
   ) || ['En Route Eq', 'Assisting'].includes(staff.status);
 
-  const statusOptions = isOnEq
-    ? ['En Route Eq', 'Assisting', 'Delivered Eq']
-    : isOnAnyActiveCall
-      ? ['En Route', 'On Scene', 'Transporting']
-      : ['Available', 'On Break', 'In Clinic'];
+  let statusOptions = ['Available', 'On Break', 'In Clinic'];
+  if (isOnEq) {
+    statusOptions = ['En Route Eq', 'Assisting', 'Delivered Eq'];
+  } else if (isOnAnyActiveCall) {
+    statusOptions = ['En Route', 'On Scene', 'Transporting'];
+  }
 
   const postOptions: string[] = React.useMemo(() => {
     const base: string[] = ['Clinic']; // Only Clinic, not Transporting
@@ -174,21 +175,21 @@ export default function TeamCard({
                   <MoreVertical className="h-4 w-4" />
                 </button>
               </DropdownTrigger>
-            <DropdownMenu
-              aria-label="Team actions"
-              itemClasses={{ base: 'px-3 py-2 text-sm text-surface-light rounded-xl' }}
-              onAction={(key) => {
-                if (key === 'refresh') onRefreshPost?.(staff.team);
-                if (key === 'edit') onEdit?.(staff);
-                if (key === 'delete') onDelete?.(staff.team);
-              }}
-            >
-              <DropdownItem key="refresh">Refresh Post</DropdownItem>
-              <DropdownItem key="edit">Edit</DropdownItem>
-              <DropdownItem key="delete" className="text-status-red">Delete</DropdownItem>
-            </DropdownMenu>
-          </Dropdown>
-        </div>
+              <DropdownMenu
+                aria-label="Team actions"
+                itemClasses={{ base: 'px-3 py-2 text-sm text-surface-light rounded-xl' }}
+                onAction={(key) => {
+                  if (key === 'refresh') onRefreshPost?.(staff.team);
+                  if (key === 'edit') onEdit?.(staff);
+                  if (key === 'delete') onDelete?.(staff.team);
+                }}
+              >
+                <DropdownItem key="refresh">Refresh Post</DropdownItem>
+                <DropdownItem key="edit">Edit</DropdownItem>
+                <DropdownItem key="delete" className="text-status-red">Delete</DropdownItem>
+              </DropdownMenu>
+            </Dropdown>
+          </div>
         </div>
       </CardHeader>
 
@@ -207,15 +208,15 @@ export default function TeamCard({
                 const val = Array.from(keys as Set<string>)[0] || '';
                 if (val) {
                   if (val === 'Available') {
-                    const targetLocation = 
-                      staff.originalPost || 
-                      event.pendingAssignments?.[staff.team]?.post || 
+                    const targetLocation =
+                      staff.originalPost ||
+                      event.pendingAssignments?.[staff.team]?.post ||
                       lastValidLocation.current;
 
                     if (targetLocation && targetLocation !== staff.location) {
                       onLocationChange(staff, targetLocation);
                     } else if (staff.location === 'Clinic') {
-                      onLocationChange(staff, ''); 
+                      onLocationChange(staff, '');
                     }
                   }
                   onStatusChange(staff, val);
@@ -304,8 +305,8 @@ export default function TeamCard({
                   timestamp: Date.now(),
                   message: line
                 }));
-                
-                const updatedStaff = event.staff.map(s => 
+
+                const updatedStaff = event.staff.map(s =>
                   s.team === staff.team ? { ...s, log: newLog } : s
                 );
                 await updateEvent({ staff: updatedStaff });

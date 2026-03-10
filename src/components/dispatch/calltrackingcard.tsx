@@ -16,7 +16,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { Event, Call } from '@/app/types';
+import type { Event, Call, Staff } from '@/app/types';
 
 type CallTrackingCardProps = {
   call: Call;
@@ -32,7 +32,6 @@ type CallTrackingCardProps = {
   handleTogglePriority: (callId: string) => void;
   handleDeleteCall: (callId: string) => void;
   formatAgeSex: (age?: string | number, gender?: string) => string;
-  getCallRowClass: (call: Call) => string;
   updateEvent: (updates: Partial<Event>) => Promise<void>;
 };
 
@@ -53,7 +52,7 @@ function useMMSS(since?: number) {
 function callBg(call: Call, event: Event) {
   // Check if any assigned team has active status
   if (!Array.isArray(call.assignedTeam)) return 'bg-surface-deep';
-  
+
   const statuses = call.assignedTeam
     .map(t => event?.staff?.find(s => s.team === t)?.status)
     .filter((status): status is string => status !== undefined);
@@ -79,7 +78,6 @@ export default function CallTrackingCard({
   handleTogglePriority,
   handleDeleteCall,
   formatAgeSex,
-  getCallRowClass,
   updateEvent,
 }: CallTrackingCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -91,7 +89,7 @@ export default function CallTrackingCard({
   const notesFocusedRef = useRef(false);
   const [logText, setLogText] = useState(() => {
     if (call.log && call.log.length > 0) {
-      return call.log.map((entry: {timestamp: number; message: string}) => entry.message).join('\n');
+      return call.log.map((entry: { timestamp: number; message: string }) => entry.message).join('\n');
     }
     return '';
   });
@@ -120,7 +118,7 @@ export default function CallTrackingCard({
   useEffect(() => {
     if (!logFocusedRef.current) {
       const newText = call.log && call.log.length > 0
-        ? call.log.map((entry: {timestamp: number; message: string}) => entry.message).join('\n')
+        ? call.log.map((entry: { timestamp: number; message: string }) => entry.message).join('\n')
         : '';
       setLogText(newText);
     }
@@ -139,13 +137,13 @@ export default function CallTrackingCard({
 
   // Get available teams for dropdown (including On Break and In Clinic)
   const availableStaff = useMemo(() => {
-    return (event.staff || []).filter(s => 
+    return (event.staff || []).filter(s =>
       !call.assignedTeam?.includes(s.team)
     );
   }, [event.staff, call.assignedTeam]);
 
   const availableSupervisors = useMemo(() => {
-    return (event.supervisor || []).filter(s => 
+    return (event.supervisor || []).filter(s =>
       !call.assignedTeam?.includes(s.team)
     );
   }, [event.supervisor, call.assignedTeam]);
@@ -159,22 +157,86 @@ export default function CallTrackingCard({
 
   // Get teams available for equipment delivery
   const teamsForEquipment = useMemo(() => {
-    return (event.staff || []).filter(s => 
+    return (event.staff || []).filter(s =>
       ['Available', 'In Clinic', 'On Break'].includes(s.status)
     );
   }, [event.staff]);
 
+  const handleAssignEquipment = async (equipName: string, t: Staff) => {
+    const now = new Date();
+    const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
+
+    // Find the equipment object in venue or event equipment
+    const venueEquipment = event.venue?.equipment || [];
+    const equipmentObj = venueEquipment.find(eq =>
+      (typeof eq === 'string' ? eq : eq.name) === equipName
+    );
+    const equipmentId = typeof equipmentObj === 'object' ? equipmentObj.id : equipName;
+
+    const updatedEquipment = event.eventEquipment?.map((eq) =>
+      eq.id === equipmentId || eq.name === equipName
+        ? {
+          ...eq,
+          status: 'In Use' as const,
+          assignedTeam: t.team,
+          location: call.location
+        }
+        : eq
+    );
+
+    const callLogEntry = {
+      timestamp: now.getTime(),
+      message: `${hhmm} - ${equipName} assigned to ${t.team} for this call.`
+    };
+
+    const teamLogEntry = {
+      timestamp: now.getTime(),
+      message: `${hhmm} - responding to call #${callDisplayNumber} with ${equipName}`
+    };
+
+    const updatedCall = {
+      ...call,
+      assignedTeam: [...(call.assignedTeam || []), t.team],
+      equipment: [...(call.equipment || []), equipName],
+      equipmentTeams: [...(call.equipmentTeams || []), t.team],
+      status: 'Assigned',
+      log: [...(call.log || []), callLogEntry]
+    };
+
+    const updatedStaff = event.staff.map((staff) =>
+      staff.team === t.team
+        ? {
+          ...staff,
+          status: 'En Route Eq',
+          location: call.location,
+          originalPost: staff.location || 'Unknown',
+          log: [...(staff.log || []), teamLogEntry]
+        }
+        : staff
+    );
+
+    const updatedCalls = event.calls.map((c) =>
+      c.id === call.id ? updatedCall : c
+    );
+
+    await updateEvent({
+      calls: updatedCalls,
+      staff: updatedStaff,
+      eventEquipment: updatedEquipment
+    });
+  };
+
   return (
     <Card className={`rounded-2xl shadow-sm border-0 ${bg}`}>
       {/* HEADER */}
-      <CardHeader 
+      <CardHeader
         onClick={() => setExpanded(v => !v)}
         className="relative flex items-center justify-between px-4 py-3 pb-0 cursor-pointer select-none"
       >
         <div className="text-[15px] sm:text-base font-semibold text-surface-light">
           Call {callDisplayNumber}
         </div>
-        
+
         {/* Right section: Timer and Menu aligned horizontally */}
         <div className="absolute top-3 right-3 flex items-center gap-2">
           {/* Timer */}
@@ -195,25 +257,25 @@ export default function CallTrackingCard({
                 </button>
               </DropdownTrigger>
               <DropdownMenu aria-label="Call actions">
-                <DropdownItem 
+                <DropdownItem
                   key="showLog"
                   onPress={() => setExpanded(v => !v)}
                 >
                   {expanded ? 'Hide Log' : 'Show Log'}
                 </DropdownItem>
-                <DropdownItem 
+                <DropdownItem
                   key="duplicate"
                   onPress={() => handleMarkDuplicate(call.id)}
                 >
                   Mark as Duplicate
                 </DropdownItem>
-                <DropdownItem 
+                <DropdownItem
                   key="priority"
                   onPress={() => handleTogglePriority(call.id)}
                 >
                   {call.priority ? 'Remove Priority' : 'Mark as Priority'}
                 </DropdownItem>
-                <DropdownItem 
+                <DropdownItem
                   key="delete"
                   className="text-danger"
                   color="danger"
@@ -315,7 +377,7 @@ export default function CallTrackingCard({
             const statusOptions = isEquipmentOnlyTeam
               ? ['En Route Eq', 'Assisting', 'Delivered Eq']
               : ['En Route', 'On Scene', 'Unable to Locate', 'Transporting', 'Rolled from Scene', 'Delivered', 'Refusal', 'NMM', 'Detached'];
-            
+
             // Get current team status from event
             const teamStaff = event.staff?.find(s => s.team === team) || event.supervisor?.find(s => s.team === team);
             const currentStatus = teamStaff?.status || 'Unknown';
@@ -401,9 +463,8 @@ export default function CallTrackingCard({
                         <DropdownMenuItem
                           key={s.team}
                           onClick={() => onAddTeamToCall(call.id, s.team)}
-                          className={`hover:bg-surface-liner focus:bg-surface-liner cursor-pointer ${
-                            isBreakOrClinic ? 'bg-status-blue/20 text-surface-light' : 'text-surface-light'
-                          }`}
+                          className={`hover:bg-surface-liner focus:bg-surface-liner cursor-pointer ${isBreakOrClinic ? 'bg-status-blue/20 text-surface-light' : 'text-surface-light'
+                            }`}
                         >
                           {s.team} {isBreakOrClinic && `(${s.status})`}
                         </DropdownMenuItem>
@@ -430,9 +491,8 @@ export default function CallTrackingCard({
                         <DropdownMenuItem
                           key={s.team}
                           onClick={() => onAddTeamToCall(call.id, s.team)}
-                          className={`hover:bg-surface-liner focus:bg-surface-liner cursor-pointer ${
-                            isBreakOrClinic ? 'bg-status-blue/20 text-surface-light' : 'text-surface-light'
-                          }`}
+                          className={`hover:bg-surface-liner focus:bg-surface-liner cursor-pointer ${isBreakOrClinic ? 'bg-status-blue/20 text-surface-light' : 'text-surface-light'
+                            }`}
                         >
                           {s.team} {isBreakOrClinic && `(${s.status})`}
                         </DropdownMenuItem>
@@ -465,72 +525,9 @@ export default function CallTrackingCard({
                               return (
                                 <DropdownMenuItem
                                   key={t.team}
-                                  onClick={async () => {
-                                    const now = new Date();
-                                    const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-
-                                    // Find the equipment object in venue or event equipment
-                                    const venueEquipment = event.venue?.equipment || [];
-                                    const equipmentObj = venueEquipment.find(eq => 
-                                      (typeof eq === 'string' ? eq : eq.name) === equipName
-                                    );
-                                    const equipmentId = typeof equipmentObj === 'object' ? equipmentObj.id : equipName;
-
-                                    const updatedEquipment = event.eventEquipment?.map((eq) =>
-                                      eq.id === equipmentId || eq.name === equipName
-                                        ? {
-                                            ...eq,
-                                            status: 'In Use' as const,
-                                            assignedTeam: t.team,
-                                            location: call.location
-                                          }
-                                        : eq
-                                    );
-
-                                    const callLogEntry = {
-                                      timestamp: now.getTime(),
-                                      message: `${hhmm} - ${equipName} assigned to ${t.team} for this call.`
-                                    };
-
-                                    const teamLogEntry = {
-                                      timestamp: now.getTime(),
-                                      message: `${hhmm} - responding to call #${callDisplayNumber} with ${equipName}`
-                                    };
-
-                                    const updatedCall = {
-                                      ...call,
-                                      assignedTeam: [...(call.assignedTeam || []), t.team],
-                                      equipment: [...(call.equipment || []), equipName],
-                                      equipmentTeams: [...(call.equipmentTeams || []), t.team],
-                                      status: 'Assigned',
-                                      log: [...(call.log || []), callLogEntry]
-                                    };
-
-                                    const updatedStaff = event.staff.map((staff) =>
-                                      staff.team === t.team
-                                        ? {
-                                            ...staff,
-                                            status: 'En Route Eq',
-                                            location: call.location,
-                                            originalPost: staff.location || 'Unknown',
-                                            log: [...(staff.log || []), teamLogEntry]
-                                          }
-                                        : staff
-                                    );
-
-                                    const updatedCalls = event.calls.map((c) =>
-                                      c.id === call.id ? updatedCall : c
-                                    );
-
-                                    await updateEvent({
-                                      calls: updatedCalls,
-                                      staff: updatedStaff,
-                                      eventEquipment: updatedEquipment
-                                    });
-                                  }}
-                                  className={`hover:bg-surface-liner focus:bg-surface-liner cursor-pointer ${
-                                    isBreakOrClinic ? 'bg-status-blue/20 text-surface-light' : 'text-surface-light'
-                                  }`}
+                                  onClick={() => handleAssignEquipment(equipName, t)}
+                                  className={`hover:bg-surface-liner focus:bg-surface-liner cursor-pointer ${isBreakOrClinic ? 'bg-status-blue/20 text-surface-light' : 'text-surface-light'
+                                    }`}
                                 >
                                   {t.team} {isBreakOrClinic && `(${t.status})`}
                                 </DropdownMenuItem>
@@ -577,7 +574,7 @@ export default function CallTrackingCard({
                   const text = notesText;
                   if ((call.notes || '') !== text) {
                     const updatedCall = { ...call, notes: text };
-                    const updated = event.calls.map((c: Call) => 
+                    const updated = event.calls.map((c: Call) =>
                       c.id === call.id ? updatedCall : c
                     );
                     await updateEvent({ calls: updated });
@@ -608,16 +605,16 @@ export default function CallTrackingCard({
                 onBlur={async () => {
                   logFocusedRef.current = false;
                   const text = logText;
-                  
+
                   // Convert text back to log entries
                   const lines = text.split('\n').filter(line => line.trim());
                   const newLog = lines.map(line => ({
                     timestamp: Date.now(),
                     message: line
                   }));
-                  
+
                   const updatedCall = { ...call, log: newLog };
-                  const updated = event.calls.map((c: Call) => 
+                  const updated = event.calls.map((c: Call) =>
                     c.id === call.id ? updatedCall : c
                   );
                   await updateEvent({ calls: updated });

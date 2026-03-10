@@ -7,7 +7,8 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAuth } from 'firebase/auth';
 import { db } from '@/app/firebase';
-import { addDoc, collection, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { venueService } from '@/services/venue.service';
+import { collection, doc, getDoc } from 'firebase/firestore';
 import {
   getStorage,
   ref,
@@ -30,11 +31,11 @@ import {
   Tab,
   ScrollShadow,
 } from '@heroui/react';
-import { 
-  MapPin, 
-  Plus,  
-  Upload, 
-  Trash2, 
+import {
+  MapPin,
+  Plus,
+  Upload,
+  Trash2,
   Edit2,
   MapPinned,
   MousePointer2,
@@ -128,11 +129,11 @@ export default function VenueManagementPageClient() {
   // Location edit modal
   const [isLocationEditModalOpen, setIsLocationEditModalOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<{ layerIdx: number; postIdx: number } | null>(null);
-  
+
   // Equipment editing state
   const [editingEquipmentIndex, setEditingEquipmentIndex] = useState<number | null>(null);
   const [equipmentEditInput, setEquipmentEditInput] = useState('');
-  
+
   const [selectedLeftTab, setSelectedLeftTab] = useState<string>('locations');
 
 
@@ -162,9 +163,8 @@ export default function VenueManagementPageClient() {
     if (venueId && userId) {
       const loadVenue = async () => {
         try {
-          const venueDoc = await getDoc(doc(db, 'venues', venueId));
-          if (venueDoc.exists()) {
-            const venue = venueDoc.data() as Venue & { layers?: Layer[] };
+          const venue = await venueService.getById(venueId);
+          if (venue) {
             let layers: Layer[];
             if (venue.layers && venue.layers.length > 0) {
               layers = venue.layers;
@@ -303,7 +303,7 @@ export default function VenueManagementPageClient() {
   };
 
   // Handle zoom
-    // Handle zoom (disabled for wheel/trackpad - use buttons only)
+  // Handle zoom (disabled for wheel/trackpad - use buttons only)
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     // Prevent default scroll behavior but don't zoom
     e.preventDefault();
@@ -550,13 +550,12 @@ export default function VenueManagementPageClient() {
           <React.Fragment key={idx}>
             <div
               style={{ left, top }}
-              className={`absolute z-10 flex h-6 w-6 cursor-grab items-center justify-center rounded-full border-2 transition-all ${
-                isPending
+              className={`absolute z-10 flex h-6 w-6 cursor-grab items-center justify-center rounded-full border-2 transition-all ${isPending
                   ? 'border-status-blue bg-status-blue/20 scale-125'
                   : isHover || draggingIdx === idx
-                  ? 'border-accent bg-accent/30 scale-110'
-                  : 'border-accent bg-accent/20 hover:scale-110'
-              } ${draggingIdx === idx ? 'cursor-grabbing scale-110' : ''}`}
+                    ? 'border-accent bg-accent/30 scale-110'
+                    : 'border-accent bg-accent/20 hover:scale-110'
+                } ${draggingIdx === idx ? 'cursor-grabbing scale-110' : ''}`}
               onMouseEnter={() => setHoverId(idx)}
               onMouseLeave={() => setHoverId((cur) => (cur === idx ? null : cur))}
               onMouseDown={onMarkerMouseDown(idx)}
@@ -677,20 +676,20 @@ export default function VenueManagementPageClient() {
       if (venueId) {
         // Update existing venue
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await updateDoc(doc(db, 'venues', venueId), dataToSave as any);
+        await venueService.update(venueId, dataToSave as any);
       } else {
         // Create new venue
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await addDoc(collection(db, 'venues'), dataToSave as any);
+        await venueService.create(crypto.randomUUID(), dataToSave as any);
       }
       router.push('/venues/selection')
     } catch (error: unknown) {
       console.error('Error saving venue:', error);
       const message =
         typeof error === 'object' &&
-        error !== null &&
-        'message' in error &&
-        typeof (error as { message?: unknown }).message === 'string'
+          error !== null &&
+          'message' in error &&
+          typeof (error as { message?: unknown }).message === 'string'
           ? (error as { message: string }).message
           : 'Unknown error';
       alert(
@@ -750,565 +749,565 @@ export default function VenueManagementPageClient() {
   return (
     <main className="relative bg-surface-deepest text-white h-[calc(10-0vh-3rem)]">
       <DiagonalStreaksFixed />
-      
+
       <div className="relative z-10 pt-4 max-w-[1200px] mx-auto">
         <div>
 
           <div className="flex h-[calc(100vh-80px)]">
-          {/* Hidden file input */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              setMapFile(e.target.files?.[0] ?? null);
-              setPendingLayer(currentLayer);
-            }}
-          />
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                setMapFile(e.target.files?.[0] ?? null);
+                setPendingLayer(currentLayer);
+              }}
+            />
 
-          <PanelGroup direction="horizontal">
-            {/* Left Panel - Resizable */}
-            <Panel defaultSize={30} minSize={25} maxSize={50}>
-              <div className="flex flex-col h-full relative">
-                <div className="flex-1 p-6 pb-12">
-                  <div className="space-y-6">
+            <PanelGroup direction="horizontal">
+              {/* Left Panel - Resizable */}
+              <Panel defaultSize={30} minSize={25} maxSize={50}>
+                <div className="flex flex-col h-full relative">
+                  <div className="flex-1 p-6 pb-12">
+                    <div className="space-y-6">
 
-                  {/* Venue Name */}
-                  <div>
-                    <Input
-                      label="Venue Name"
-                      placeholder="e.g., Convention Center Hall A"
-                      value={venueData.name}
-                      onValueChange={handleChange}
-                      isRequired
-                      labelPlacement={"outside"}
-                      variant="flat"
-                      classNames={{
-                        label: 'text-white font-medium',
-                        inputWrapper: 'rounded-2xl px-4 hover:bg-surface-deep',
-                        input: 'text-white outline-none focus:outline-none data-[focus=true]:outline-none',
-                      }}
-                    />
-                  </div>
-
-                  {/* Locations & Equipment Section with Tabs */}
-                  <Tabs className="flex-1 w-full" fullWidth radius="lg" selectedKey={selectedLeftTab} onSelectionChange={(key) => setSelectedLeftTab(key as string)}>
-                    <Tab key="locations" title="Locations">
-                      <label className="mb-2 block text-sm font-medium text-white">
-                        Locations
-                      </label>
-                      <div className="flex gap-2">
+                      {/* Venue Name */}
+                      <div>
                         <Input
-                          placeholder="e.g., Main Entrance"
-                          value={locationInput}
-                          onValueChange={setLocationInput}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              addTextLocation();
-                            }
-                          }}
+                          label="Venue Name"
+                          placeholder="e.g., Convention Center Hall A"
+                          value={venueData.name}
+                          onValueChange={handleChange}
+                          isRequired
+                          labelPlacement={"outside"}
                           variant="flat"
                           classNames={{
-                            input: 'text-white text-sm outline-none focus:outline-none data-[focus=true]:outline-none',
+                            label: 'text-white font-medium',
                             inputWrapper: 'rounded-2xl px-4 hover:bg-surface-deep',
+                            input: 'text-white outline-none focus:outline-none data-[focus=true]:outline-none',
                           }}
                         />
-                        <Button
-                          isIconOnly
-                          onPress={addTextLocation}
-                          className="flex-shrink-0 bg-accent hover:bg-accent/90 text-white"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
                       </div>
-                      {allPosts.length > 0 && (
-                        <ScrollShadow className="mt-3 space-y-2 pr-2 max-h-[calc(100vh-430px)] scrollbar-hide">
-                          {allPosts.map((item, idx) => {
-                            const post = item.post;
-                            const label = typeof post === 'string' ? post : post.name;
-                            const hasCoordinates = typeof post === 'object' && post.x !== null && post.y !== null;
-                            const isPending = pendingMarker?.layerIdx === item.layerIdx && pendingMarker?.postIdx === item.postIdx;
 
-                            return (
-                              <Card
-                                key={idx}
-                                isBlurred
-                                className="border-2 rounded-2xl border-default-200 bg-transparent"
-                              >
-                                <div className="flex items-center justify-between px-3 py-2">
-                                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    {hasCoordinates ? (
-                                      <MapPinned className="h-4 w-4 flex-shrink-0 text-accent" />
-                                    ) : (
-                                      <MapPin className="h-4 w-4 flex-shrink-0 text-surface-light" />
-                                    )}
-                                    <span className={`text-sm truncate ${isPending ? 'text-status-blue italic' : 'text-white'}`}>
-                                      {label}
-                                    </span>
-                                    {item.layerName && (
-                                      <span className="text-xs text-surface-light">({item.layerName})</span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    {typeof post !== 'string' && (
-                                      <Button
-                                        isIconOnly
-                                        size="sm"
-                                        variant="light"
-                                        onPress={() => renamePost(item.layerIdx, item.postIdx)}
-                                        className="min-w-6 w-6 h-6"
-                                      >
-                                        <Edit2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    )}
-                                    <Button
-                                      isIconOnly
-                                      size="sm"
-                                      variant="light"
-                                      color="danger"
-                                      onPress={() => removePost(item.layerIdx, item.postIdx)}
-                                      className="min-w-6 w-6 h-6"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              </Card>
-                            );
-                          })}
-                        </ScrollShadow>
-                      )}
-                    </Tab>
-                    <Tab key="equipment" title="Equipment">
-                      <label className="mb-2 block text-sm font-medium text-white">
-                        Equipment <span className="text-surface-light text-xs">(Optional)</span>
-                      </label>
-                      <div className="flex gap-2 mb-3">
-                        <Input
-                          placeholder="e.g., Gurney 1"
-                          value={equipmentInput}
-                          onValueChange={setEquipmentInput}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              addEquipment();
-                            }
-                          }}
-                          variant="flat"
-                          classNames={{
-                            input: 'text-white text-sm outline-none focus:outline-none data-[focus=true]:outline-none',
-                            inputWrapper: 'rounded-2xl px-4 hover:bg-surface-deep',
-                          }}
-                        />
-                        <Button
-                          isIconOnly
-                          onPress={addEquipment}
-                          className="flex-shrink-0 bg-accent hover:bg-accent/90 text-white"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      {venueData.equipment.length > 0 && (
-                        <ScrollShadow className="space-y-2 pr-2 max-h-[calc(100vh-430px)] scrollbar-hide">
-                          {venueData.equipment.map((item, idx) => (
-                            <Card
-                              key={idx}
-                              isBlurred
-                              className="border-2 rounded-2xl border-default-200 bg-transparent"
+                      {/* Locations & Equipment Section with Tabs */}
+                      <Tabs className="flex-1 w-full" fullWidth radius="lg" selectedKey={selectedLeftTab} onSelectionChange={(key) => setSelectedLeftTab(key as string)}>
+                        <Tab key="locations" title="Locations">
+                          <label className="mb-2 block text-sm font-medium text-white">
+                            Locations
+                          </label>
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="e.g., Main Entrance"
+                              value={locationInput}
+                              onValueChange={setLocationInput}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  addTextLocation();
+                                }
+                              }}
+                              variant="flat"
+                              classNames={{
+                                input: 'text-white text-sm outline-none focus:outline-none data-[focus=true]:outline-none',
+                                inputWrapper: 'rounded-2xl px-4 hover:bg-surface-deep',
+                              }}
+                            />
+                            <Button
+                              isIconOnly
+                              onPress={addTextLocation}
+                              className="flex-shrink-0 bg-accent hover:bg-accent/90 text-white"
                             >
-                              <div className="flex items-center justify-between px-3 py-2">
-                                {editingEquipmentIndex === idx ? (
-                                  <>
-                                    <Input
-                                      value={equipmentEditInput}
-                                      onValueChange={setEquipmentEditInput}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          e.preventDefault();
-                                          saveEquipmentEdit();
-                                        } else if (e.key === 'Escape') {
-                                          e.preventDefault();
-                                          cancelEquipmentEdit();
-                                        }
-                                      }}
-                                      variant="flat"
-                                      size="sm"
-                                      autoFocus
-                                      classNames={{
-                                        input: 'text-white text-sm outline-none focus:outline-none data-[focus=true]:outline-none',
-                                        inputWrapper: 'rounded-lg px-2 hover:bg-surface-deep',
-                                      }}
-                                    />
-                                    <div className="flex items-center gap-1 ml-2">
-                                      <Button
-                                        isIconOnly
-                                        size="sm"
-                                        variant="light"
-                                        color="success"
-                                        onPress={saveEquipmentEdit}
-                                        className="min-w-6 w-6 h-6 flex-shrink-0"
-                                      >
-                                        <Edit2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                      <Button
-                                        isIconOnly
-                                        size="sm"
-                                        variant="light"
-                                        onPress={cancelEquipmentEdit}
-                                        className="min-w-6 w-6 h-6 flex-shrink-0"
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </div>
-                                  </>
-                                ) : (
-                                  <>
-                                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                                      <span className="text-sm text-white truncate">
-                                        {item.name}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <Button
-                                        isIconOnly
-                                        size="sm"
-                                        variant="light"
-                                        onPress={() => startEditEquipment(idx)}
-                                        className="min-w-6 w-6 h-6 flex-shrink-0"
-                                      >
-                                        <Edit2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                      <Button
-                                        isIconOnly
-                                        size="sm"
-                                        variant="light"
-                                        color="danger"
-                                        onPress={() => removeEquipment(idx)}
-                                        className="min-w-6 w-6 h-6 flex-shrink-0"
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            </Card>
-                          ))}
-                        </ScrollShadow>
-                      )}
-                    </Tab>
-                  </Tabs>
-                </div>
-              </div>
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          {allPosts.length > 0 && (
+                            <ScrollShadow className="mt-3 space-y-2 pr-2 max-h-[calc(100vh-430px)] scrollbar-hide">
+                              {allPosts.map((item, idx) => {
+                                const post = item.post;
+                                const label = typeof post === 'string' ? post : post.name;
+                                const hasCoordinates = typeof post === 'object' && post.x !== null && post.y !== null;
+                                const isPending = pendingMarker?.layerIdx === item.layerIdx && pendingMarker?.postIdx === item.postIdx;
 
-              {/* Action Buttons - Fixed to Bottom */}
-              <div className="absolute bottom-0 left-0 right-0 p-6">
-                <div className="flex gap-3">
-                  <Button
-                    variant="bordered"
-                    onPress={() => router.push('/venues/selection')}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onPress={() => handleSubmit()}
-                    isLoading={isUploading}
-                    isDisabled={!venueData.name.trim()}
-                    className="flex-1 bg-accent hover:bg-accent/90 text-white px-10"
-                  >
-                    {isUploading ? (venueId ? 'Updating...' : 'Creating...') : (venueId ? 'Update Venue' : 'Create Venue')}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Panel>
-          {/* Resize Handle */}
-          <PanelResizeHandle className="w-1 bg-surface-liner transition-colors cursor-col-resize flex items-center justify-center group">
-            <div className="w-0.5 h-8 bg-surface-light/30 rounded-full transition-colors" />
-          </PanelResizeHandle>
-          {/* Right Panel - Resizable */}
-          <Panel defaultSize={70} minSize={45}>
-            <div className="flex flex-col h-full relative px-6 pt-6 pb-[72px] overflow-hidden">
-              <div className="mb-3 flex items-center justify-between flex-shrink-0">
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-white">
-                    Venue Map <span className="text-surface-light text-xs">(Optional)</span>
-                  </label>
-                  <Input
-                    value={venueData.layers[currentLayer].name}
-                    onValueChange={updateLayerName}
-                    variant="flat"
-                    size="md"
-                    classNames={{
-                      input: 'text-white text-sm outline-none focus:outline-none data-[focus=true]:outline-none',
-                      inputWrapper: 'rounded-2xl px-4 pr-6 hover:bg-surface-deep',
-                    }}
-                    placeholder="Layer name"
-                  />
-                </div>
-                {previewUrl && (
-                  <div className="flex gap-2">
-                    <Button
-                      size="md"
-                      variant={isAddMarkerMode ? 'solid' : 'bordered'}
-                      color={isAddMarkerMode ? 'primary' : 'default'}
-                      onPress={() => setIsAddMarkerMode(!isAddMarkerMode)}
-                      startContent={isAddMarkerMode ? <MousePointer2 className="h-3.5 w-3.5" /> : <MapPin className="h-3.5 w-3.5" />}
-                      className={isAddMarkerMode ? 'bg-accent hover:bg-accent/90' : ''}
-                    >
-                      {isAddMarkerMode ? 'Click to Place' : 'Add Markers'}
-                    </Button>
+                                return (
+                                  <Card
+                                    key={idx}
+                                    isBlurred
+                                    className="border-2 rounded-2xl border-default-200 bg-transparent"
+                                  >
+                                    <div className="flex items-center justify-between px-3 py-2">
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        {hasCoordinates ? (
+                                          <MapPinned className="h-4 w-4 flex-shrink-0 text-accent" />
+                                        ) : (
+                                          <MapPin className="h-4 w-4 flex-shrink-0 text-surface-light" />
+                                        )}
+                                        <span className={`text-sm truncate ${isPending ? 'text-status-blue italic' : 'text-white'}`}>
+                                          {label}
+                                        </span>
+                                        {item.layerName && (
+                                          <span className="text-xs text-surface-light">({item.layerName})</span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        {typeof post !== 'string' && (
+                                          <Button
+                                            isIconOnly
+                                            size="sm"
+                                            variant="light"
+                                            onPress={() => renamePost(item.layerIdx, item.postIdx)}
+                                            className="min-w-6 w-6 h-6"
+                                          >
+                                            <Edit2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                        )}
+                                        <Button
+                                          isIconOnly
+                                          size="sm"
+                                          variant="light"
+                                          color="danger"
+                                          onPress={() => removePost(item.layerIdx, item.postIdx)}
+                                          className="min-w-6 w-6 h-6"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </Card>
+                                );
+                              })}
+                            </ScrollShadow>
+                          )}
+                        </Tab>
+                        <Tab key="equipment" title="Equipment">
+                          <label className="mb-2 block text-sm font-medium text-white">
+                            Equipment <span className="text-surface-light text-xs">(Optional)</span>
+                          </label>
+                          <div className="flex gap-2 mb-3">
+                            <Input
+                              placeholder="e.g., Gurney 1"
+                              value={equipmentInput}
+                              onValueChange={setEquipmentInput}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  addEquipment();
+                                }
+                              }}
+                              variant="flat"
+                              classNames={{
+                                input: 'text-white text-sm outline-none focus:outline-none data-[focus=true]:outline-none',
+                                inputWrapper: 'rounded-2xl px-4 hover:bg-surface-deep',
+                              }}
+                            />
+                            <Button
+                              isIconOnly
+                              onPress={addEquipment}
+                              className="flex-shrink-0 bg-accent hover:bg-accent/90 text-white"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          {venueData.equipment.length > 0 && (
+                            <ScrollShadow className="space-y-2 pr-2 max-h-[calc(100vh-430px)] scrollbar-hide">
+                              {venueData.equipment.map((item, idx) => (
+                                <Card
+                                  key={idx}
+                                  isBlurred
+                                  className="border-2 rounded-2xl border-default-200 bg-transparent"
+                                >
+                                  <div className="flex items-center justify-between px-3 py-2">
+                                    {editingEquipmentIndex === idx ? (
+                                      <>
+                                        <Input
+                                          value={equipmentEditInput}
+                                          onValueChange={setEquipmentEditInput}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.preventDefault();
+                                              saveEquipmentEdit();
+                                            } else if (e.key === 'Escape') {
+                                              e.preventDefault();
+                                              cancelEquipmentEdit();
+                                            }
+                                          }}
+                                          variant="flat"
+                                          size="sm"
+                                          autoFocus
+                                          classNames={{
+                                            input: 'text-white text-sm outline-none focus:outline-none data-[focus=true]:outline-none',
+                                            inputWrapper: 'rounded-lg px-2 hover:bg-surface-deep',
+                                          }}
+                                        />
+                                        <div className="flex items-center gap-1 ml-2">
+                                          <Button
+                                            isIconOnly
+                                            size="sm"
+                                            variant="light"
+                                            color="success"
+                                            onPress={saveEquipmentEdit}
+                                            className="min-w-6 w-6 h-6 flex-shrink-0"
+                                          >
+                                            <Edit2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                          <Button
+                                            isIconOnly
+                                            size="sm"
+                                            variant="light"
+                                            onPress={cancelEquipmentEdit}
+                                            className="min-w-6 w-6 h-6 flex-shrink-0"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                          <span className="text-sm text-white truncate">
+                                            {item.name}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <Button
+                                            isIconOnly
+                                            size="sm"
+                                            variant="light"
+                                            onPress={() => startEditEquipment(idx)}
+                                            className="min-w-6 w-6 h-6 flex-shrink-0"
+                                          >
+                                            <Edit2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                          <Button
+                                            isIconOnly
+                                            size="sm"
+                                            variant="light"
+                                            color="danger"
+                                            onPress={() => removeEquipment(idx)}
+                                            className="min-w-6 w-6 h-6 flex-shrink-0"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                </Card>
+                              ))}
+                            </ScrollShadow>
+                          )}
+                        </Tab>
+                      </Tabs>
+                    </div>
                   </div>
-                )}
-              </div>
 
-              <div 
-                className={`rounded-xl relative flex flex-col items-center justify-start w-full ${previewUrl ? 'max-h-[calc(100vh-180px)]' : 'h-full'}`}
-              >
-                {previewUrl ? (
-                  <div className="w-full flex flex-col gap-3 max-h-full">
-                    <div className="relative w-full overflow-hidden rounded-2xl">
-                      <div 
-                        ref={imgContainerRef}
-                        className="relative overflow-auto scrollbar-hide"
-                        onWheel={handleWheel}
-                        style={{ 
-                          cursor: isAddMarkerMode ? 'crosshair' : isPanning ? 'grabbing' : 'grab',
-                          maxHeight: 'calc(100vh - 200px)',
-                        }}
+                  {/* Action Buttons - Fixed to Bottom */}
+                  <div className="absolute bottom-0 left-0 right-0 p-6">
+                    <div className="flex gap-3">
+                      <Button
+                        variant="bordered"
+                        onPress={() => router.push('/venues/selection')}
+                        className="flex-1"
                       >
-                        <div
-                          className="relative inline-block"
-                          onMouseDown={handleMouseDown}
-                          onMouseMove={handleMouseMove}
-                          onMouseUp={handleMouseUp}
-                          onMouseLeave={handleMouseUp}
-                          onClick={handleImageClick}
-                          style={{
-                            transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
-                            transformOrigin: 'left top',
-                            transition: isPanning ? 'none' : 'transform 0.1s',
-                          }}
+                        Cancel
+                      </Button>
+                      <Button
+                        onPress={() => handleSubmit()}
+                        isLoading={isUploading}
+                        isDisabled={!venueData.name.trim()}
+                        className="flex-1 bg-accent hover:bg-accent/90 text-white px-10"
+                      >
+                        {isUploading ? (venueId ? 'Updating...' : 'Creating...') : (venueId ? 'Update Venue' : 'Create Venue')}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Panel>
+              {/* Resize Handle */}
+              <PanelResizeHandle className="w-1 bg-surface-liner transition-colors cursor-col-resize flex items-center justify-center group">
+                <div className="w-0.5 h-8 bg-surface-light/30 rounded-full transition-colors" />
+              </PanelResizeHandle>
+              {/* Right Panel - Resizable */}
+              <Panel defaultSize={70} minSize={45}>
+                <div className="flex flex-col h-full relative px-6 pt-6 pb-[72px] overflow-hidden">
+                  <div className="mb-3 flex items-center justify-between flex-shrink-0">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm font-medium text-white">
+                        Venue Map <span className="text-surface-light text-xs">(Optional)</span>
+                      </label>
+                      <Input
+                        value={venueData.layers[currentLayer].name}
+                        onValueChange={updateLayerName}
+                        variant="flat"
+                        size="md"
+                        classNames={{
+                          input: 'text-white text-sm outline-none focus:outline-none data-[focus=true]:outline-none',
+                          inputWrapper: 'rounded-2xl px-4 pr-6 hover:bg-surface-deep',
+                        }}
+                        placeholder="Layer name"
+                      />
+                    </div>
+                    {previewUrl && (
+                      <div className="flex gap-2">
+                        <Button
+                          size="md"
+                          variant={isAddMarkerMode ? 'solid' : 'bordered'}
+                          color={isAddMarkerMode ? 'primary' : 'default'}
+                          onPress={() => setIsAddMarkerMode(!isAddMarkerMode)}
+                          startContent={isAddMarkerMode ? <MousePointer2 className="h-3.5 w-3.5" /> : <MapPin className="h-3.5 w-3.5" />}
+                          className={isAddMarkerMode ? 'bg-accent hover:bg-accent/90' : ''}
                         >
-                          <Image
-                            ref={(node) => {
-                              if (node) {
-                                const img = node as unknown as HTMLImageElement;
-                                imgRef.current = img;
-                              }
+                          {isAddMarkerMode ? 'Click to Place' : 'Add Markers'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div
+                    className={`rounded-xl relative flex flex-col items-center justify-start w-full ${previewUrl ? 'max-h-[calc(100vh-180px)]' : 'h-full'}`}
+                  >
+                    {previewUrl ? (
+                      <div className="w-full flex flex-col gap-3 max-h-full">
+                        <div className="relative w-full overflow-hidden rounded-2xl">
+                          <div
+                            ref={imgContainerRef}
+                            className="relative overflow-auto scrollbar-hide"
+                            onWheel={handleWheel}
+                            style={{
+                              cursor: isAddMarkerMode ? 'crosshair' : isPanning ? 'grabbing' : 'grab',
+                              maxHeight: 'calc(100vh - 200px)',
                             }}
-                            src={previewUrl}
-                            alt="Venue map"
-                            width={1200}
-                            height={900}
-                            className="block"
-                            style={{ 
-                              display: 'block', 
-                              width: 'auto', 
-                              height: 'auto',
-                              maxWidth: '100%'
-                            }}
-                            unoptimized
-                            onLoad={(e) => {
-                              const ratio = e.currentTarget.naturalWidth / e.currentTarget.naturalHeight;
-                              setAspectRatio(ratio);
-                            }}
-                          />
-                          <div className="absolute inset-0 pointer-events-none">
-                            <div className="relative w-full h-full pointer-events-auto">
-                              {renderMarkers()}
+                          >
+                            <div
+                              className="relative inline-block"
+                              onMouseDown={handleMouseDown}
+                              onMouseMove={handleMouseMove}
+                              onMouseUp={handleMouseUp}
+                              onMouseLeave={handleMouseUp}
+                              onClick={handleImageClick}
+                              style={{
+                                transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
+                                transformOrigin: 'left top',
+                                transition: isPanning ? 'none' : 'transform 0.1s',
+                              }}
+                            >
+                              <Image
+                                ref={(node) => {
+                                  if (node) {
+                                    const img = node as unknown as HTMLImageElement;
+                                    imgRef.current = img;
+                                  }
+                                }}
+                                src={previewUrl}
+                                alt="Venue map"
+                                width={1200}
+                                height={900}
+                                className="block"
+                                style={{
+                                  display: 'block',
+                                  width: 'auto',
+                                  height: 'auto',
+                                  maxWidth: '100%'
+                                }}
+                                unoptimized
+                                onLoad={(e) => {
+                                  const ratio = e.currentTarget.naturalWidth / e.currentTarget.naturalHeight;
+                                  setAspectRatio(ratio);
+                                }}
+                              />
+                              <div className="absolute inset-0 pointer-events-none">
+                                <div className="relative w-full h-full pointer-events-auto">
+                                  {renderMarkers()}
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </div>
 
-                      {pendingMarker && (
-                        <div
-                          className="fixed z-30 w-52 rounded-lg border border-status-blue bg-surface-deepest p-3 shadow-xl"
-                          style={{
-                            left: '50%',
-                            top: '50%',
-                            transform: 'translate(-50%, -50%)',
-                          }}
-                        >
-                          <p className="mb-2 text-xs font-medium text-white">Name this location:</p>
-                          <Input
-                            ref={markerInputRef}
-                            value={markerNameInput}
-                            onValueChange={setMarkerNameInput}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                confirmMarkerName();
-                              } else if (e.key === 'Escape') {
-                                e.preventDefault();
-                                cancelMarkerName();
-                              }
-                            }}
-                            placeholder="Location name"
-                            size="sm"
-                            variant="bordered"
-                            classNames={{
-                              input: 'text-white text-sm outline-none focus:outline-none data-[focus=true]:outline-none',
-                              inputWrapper: 'px-4 hover:bg-surface-deep mb-2',
-                            }}
-                          />
-                          <div className="flex gap-2">
+                          {pendingMarker && (
+                            <div
+                              className="fixed z-30 w-52 rounded-lg border border-status-blue bg-surface-deepest p-3 shadow-xl"
+                              style={{
+                                left: '50%',
+                                top: '50%',
+                                transform: 'translate(-50%, -50%)',
+                              }}
+                            >
+                              <p className="mb-2 text-xs font-medium text-white">Name this location:</p>
+                              <Input
+                                ref={markerInputRef}
+                                value={markerNameInput}
+                                onValueChange={setMarkerNameInput}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    confirmMarkerName();
+                                  } else if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    cancelMarkerName();
+                                  }
+                                }}
+                                placeholder="Location name"
+                                size="sm"
+                                variant="bordered"
+                                classNames={{
+                                  input: 'text-white text-sm outline-none focus:outline-none data-[focus=true]:outline-none',
+                                  inputWrapper: 'px-4 hover:bg-surface-deep mb-2',
+                                }}
+                              />
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="flat"
+                                  onPress={cancelMarkerName}
+                                  className="flex-1"
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onPress={confirmMarkerName}
+                                  className="flex-1 bg-accent hover:bg-accent/90 text-white"
+                                >
+                                  Confirm
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Zoom Controls - Top Right */}
+                          <div className="absolute top-3 right-3 flex flex-row gap-1 z-20">
+                            <ButtonGroup>
+                              <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                onPress={() => setScale(prev => Math.min(prev + 0.5, 5))}
+                                className="bg-surface-deepest/95"
+                              >
+                                <ZoomIn className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                onPress={() => setScale(prev => Math.max(prev - 0.5, 1))}
+                                className="bg-surface-deepest/95"
+                              >
+                                <ZoomOut className="h-4 w-4" />
+                              </Button>
+                            </ButtonGroup>
                             <Button
                               size="sm"
                               variant="flat"
-                              onPress={cancelMarkerName}
-                              className="flex-1"
+                              onPress={() => {
+                                setScale(1);
+                                setPosition({ x: 0, y: 0 });
+                              }}
+                              className="bg-surface-deepest/95 text-xs px-2"
                             >
-                              Cancel
-                            </Button>
-                            <Button
-                              size="sm"
-                              onPress={confirmMarkerName}
-                              className="flex-1 bg-accent hover:bg-accent/90 text-white"
-                            >
-                              Confirm
+                              Reset
                             </Button>
                           </div>
-                        </div>
-                      )}
 
-                      {/* Zoom Controls - Top Right */}
-                      <div className="absolute top-3 right-3 flex flex-row gap-1 z-20">
-                        <ButtonGroup>
-                          <Button
-                            isIconOnly
-                            size="sm"
-                            variant="flat"
-                            onPress={() => setScale(prev => Math.min(prev + 0.5, 5))}
-                            className="bg-surface-deepest/95"
-                          >
-                            <ZoomIn className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            isIconOnly
-                            size="sm"
-                            variant="flat"
-                            onPress={() => setScale(prev => Math.max(prev - 0.5, 1))}
-                            className="bg-surface-deepest/95"
-                          >
-                            <ZoomOut className="h-4 w-4" />
-                          </Button>
-                        </ButtonGroup>
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          onPress={() => {
-                            setScale(1);
-                            setPosition({ x: 0, y: 0 });
-                          }}
-                          className="bg-surface-deepest/95 text-xs px-2"
+                          {/* Instructions overlay - Top Left */}
+                          {isAddMarkerMode && !pendingMarker && (
+                            <div className="absolute left-3 top-3 rounded-lg border border-status-blue/50 bg-surface-deepest/95 px-3 py-2 z-20 pointer-events-none">
+                              <p className="text-xs text-status-blue">
+                                Click on the map to place a location marker
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Bottom Info Bar - Now OUTSIDE and BELOW the image container */}
+                        <Card
+                          isBlurred
+                          className="border-2 border-default-200 bg-transparent w-full px-3 py-2"
                         >
-                          Reset
-                        </Button>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <MapPinned className="h-4 w-4 text-accent" />
+                              <span className="text-xs text-surface-light truncate max-w-[120px]">{mapFileName}</span>
+                              <Button
+                                size="sm"
+                                variant="flat"
+                                onPress={() => fileInputRef.current?.click()}
+                                startContent={<Upload className="h-3 w-3" />}
+                                className="ml-2"
+                              >
+                                Replace
+                              </Button>
+                            </div>
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                isDisabled={currentLayer <= 0}
+                                onPress={() => setCurrentLayer(currentLayer - 1)}
+                              >
+                                <ChevronLeft className="h-4 w-4" />
+                              </Button>
+                              <span
+                                className="text-xs text-surface-light min-w-[100px] text-center"
+                              >
+                                {venueData.layers?.[currentLayer]?.name || 'Layer'}
+                              </span>
+                              <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                isDisabled={!venueData.layers || currentLayer >= venueData.layers.length - 1}
+                                onPress={() => setCurrentLayer(currentLayer + 1)}
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                color="danger"
+                                onPress={deleteLayer}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                onPress={() => setIsNewLayerModalOpen(true)}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
                       </div>
-
-                      {/* Instructions overlay - Top Left */}
-                      {isAddMarkerMode && !pendingMarker && (
-                        <div className="absolute left-3 top-3 rounded-lg border border-status-blue/50 bg-surface-deepest/95 px-3 py-2 z-20 pointer-events-none">
-                          <p className="text-xs text-status-blue">
-                            Click on the map to place a location marker
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Bottom Info Bar - Now OUTSIDE and BELOW the image container */}
-                    <Card
-                      isBlurred
-                      className="border-2 border-default-200 bg-transparent w-full px-3 py-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <MapPinned className="h-4 w-4 text-accent" />
-                          <span className="text-xs text-surface-light truncate max-w-[120px]">{mapFileName}</span>
-                          <Button
-                            size="sm"
-                            variant="flat"
-                            onPress={() => fileInputRef.current?.click()}
-                            startContent={<Upload className="h-3 w-3" />}
-                            className="ml-2"
-                          >
-                            Replace
-                          </Button>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            isIconOnly
-                            size="sm"
-                            variant="flat"
-                            isDisabled={currentLayer <= 0}
-                            onPress={() => setCurrentLayer(currentLayer - 1)}
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                          </Button>
-                          <span
-                            className="text-xs text-surface-light min-w-[100px] text-center"
-                          >
-                            {venueData.layers?.[currentLayer]?.name || 'Layer'}
-                          </span>
-                          <Button
-                            isIconOnly
-                            size="sm"
-                            variant="flat"
-                            isDisabled={!venueData.layers || currentLayer >= venueData.layers.length - 1}
-                            onPress={() => setCurrentLayer(currentLayer + 1)}
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            isIconOnly
-                            size="sm"
-                            variant="flat"
-                            color="danger"
-                            onPress={deleteLayer}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            isIconOnly
-                            size="sm"
-                            variant="flat"
-                            onPress={() => setIsNewLayerModalOpen(true)}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
+                    ) : (
+                      <Card
+                        isBlurred
+                        className="border-2 border-default-200 bg-transparent w-full h-full px-3 py-2"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex h-full w-full flex-col items-center justify-center gap-3 text-surface-light/70 transition hover:border-status-blue/50 hover:text-status-blue rounded-xl"
+                        >
+                          <Upload className="h-12 w-12" />
+                          <div className="text-center">
+                            <p className="text-sm font-medium">Upload Venue Map</p>
+                            <p className="mt-1 text-xs text-surface-light/50">
+                              Optional - Click to select an image
+                            </p>
+                          </div>
+                        </button>
+                      </Card>
+                    )}
                   </div>
-                ) : (
-                  <Card
-                    isBlurred
-                    className="border-2 border-default-200 bg-transparent w-full h-full px-3 py-2"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex h-full w-full flex-col items-center justify-center gap-3 text-surface-light/70 transition hover:border-status-blue/50 hover:text-status-blue rounded-xl"
-                    >
-                      <Upload className="h-12 w-12" />
-                      <div className="text-center">
-                        <p className="text-sm font-medium">Upload Venue Map</p>
-                        <p className="mt-1 text-xs text-surface-light/50">
-                          Optional - Click to select an image
-                        </p>
-                      </div>
-                    </button>
-                  </Card>
-                )}
-              </div>
-            </div>
-          </Panel>
-          </PanelGroup>
+                </div>
+              </Panel>
+            </PanelGroup>
           </div>
         </div>
       </div>
@@ -1326,9 +1325,9 @@ export default function VenueManagementPageClient() {
         initialName={
           editingLocation
             ? (() => {
-                const p = venueData.layers[editingLocation.layerIdx].posts[editingLocation.postIdx];
-                return typeof p === 'string' ? p : (p && 'name' in p ? p.name : '');
-              })()
+              const p = venueData.layers[editingLocation.layerIdx].posts[editingLocation.postIdx];
+              return typeof p === 'string' ? p : (p && 'name' in p ? p.name : '');
+            })()
             : ''
         }
         initialLayerIdx={editingLocation?.layerIdx || 0}

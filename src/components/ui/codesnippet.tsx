@@ -13,7 +13,7 @@ export default function CodeSnippet({ code, label }: { code: string; label?: str
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
-      // no-op
+      console.error("Failed to copy code snippet", e);
     }
   }
 

@@ -5,6 +5,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { db } from '@/app/firebase';
 import { collection, getDocs, query, where, deleteDoc, doc, addDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { venueService } from '@/services/venue.service';
 import type { Venue, Event } from '@/app/types';
 import { useAuth } from '@/hooks/useauth';
 import LoadingScreen from '@/components/ui/loading-screen';
@@ -12,27 +13,27 @@ import { DiagonalStreaksFixed } from "@/components/ui/diagonal-streaks-fixed";
 import { stripUndefined } from '@/lib/utils';
 import ShareModal from '@/components/modals/sharemodal';
 import { Share2 } from "lucide-react";
-import { 
-  Card, 
-  CardBody, 
-  Button, 
-  Dropdown, 
-  DropdownTrigger, 
-  DropdownMenu, 
+import {
+  Card,
+  CardBody,
+  Button,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
   DropdownItem,
   Input,
   Chip,
   ScrollShadow
 } from "@heroui/react";
-import { 
-  Plus, 
-  MapPin, 
-  Calendar, 
-  Users, 
-  Phone, 
-  MoreVertical, 
-  Edit, 
-  Trash2, 
+import {
+  Plus,
+  MapPin,
+  Calendar,
+  Users,
+  Phone,
+  MoreVertical,
+  Edit,
+  Trash2,
   Play,
   Search,
   ChevronLeft
@@ -94,7 +95,7 @@ export default function VenueSelection() {
     const confirm = window.confirm('Are you sure you want to delete this venue?');
     if (!confirm) return;
     try {
-      await deleteDoc(doc(db, 'venues', venueId));
+      await venueService.deleteVenue(venueId);
       setVenues(prev => prev.filter(v => v.id !== venueId));
       if (selectedVenueId === venueId) {
         setSelectedVenueId(null);
@@ -183,7 +184,7 @@ export default function VenueSelection() {
     const cleanupIncompleteEvents = async () => {
       try {
         const draftsQuery = query(
-          collection(db, 'events'), 
+          collection(db, 'events'),
           where('userId', '==', user.uid),
           where('status', '==', 'draft')
         );
@@ -221,7 +222,7 @@ export default function VenueSelection() {
   useEffect(() => {
     // Combine Venues
     const venueMap = new Map<string, Venue>();
-    
+
     // Add owned and shared venues to map
     [...ownedVenuesList, ...sharedVenuesList].forEach(v => {
       venueMap.set(v.id, v);
@@ -286,7 +287,7 @@ export default function VenueSelection() {
 
   const filteredVenues = useMemo(() => {
     if (!searchQuery) return venueStats.sorted;
-    return venueStats.sorted.filter(v => 
+    return venueStats.sorted.filter(v =>
       v.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [venueStats.sorted, searchQuery]);
@@ -307,7 +308,7 @@ export default function VenueSelection() {
     const now = Date.now();
     const diff = now - timestamp;
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
+
     if (days === 0) return 'Used today';
     if (days === 1) return 'Used yesterday';
     if (days < 7) return `Used ${days} days ago`;
@@ -342,7 +343,7 @@ export default function VenueSelection() {
     return (
       <main className="relative bg-surface-deepest text-white h-[calc(100vh-4rem)]">
         <DiagonalStreaksFixed />
-        
+
         <div className="relative z-10 pt-10 px-4 pb-8">
           {/* Mobile: Venue List View */}
           {!selectedVenueId && (
@@ -368,7 +369,7 @@ export default function VenueSelection() {
                 {filteredVenues.map((venue) => {
                   const stats = venueStats.byVenue[venue.id];
                   return (
-                    <Card 
+                    <Card
                       key={venue.id}
                       isPressable
                       onPress={() => setSelectedVenueId(venue.id)}
@@ -390,7 +391,7 @@ export default function VenueSelection() {
                               {formatRelativeDate(stats.lastUsed)}
                             </div>
                           </div>
-                          
+
                           <div
                             onClick={(e) => e.stopPropagation()}
                             onKeyDown={(e) => e.stopPropagation()}
@@ -406,14 +407,14 @@ export default function VenueSelection() {
                                 </button>
                               </DropdownTrigger>
                               <DropdownMenu aria-label="Venue actions">
-                                <DropdownItem 
+                                <DropdownItem
                                   key="edit"
                                   startContent={<Edit className="w-4 h-4" />}
                                   onPress={() => router.push(`/venues/management?venueId=${venue.id}`)}
                                 >
                                   Edit
                                 </DropdownItem>
-                                <DropdownItem 
+                                <DropdownItem
                                   key="share"
                                   startContent={<Share2 className="w-4 h-4" />}
                                   onPress={() => setShareModalData({
@@ -425,7 +426,7 @@ export default function VenueSelection() {
                                 >
                                   Share
                                 </DropdownItem>
-                                <DropdownItem 
+                                <DropdownItem
                                   key="delete"
                                   className="text-danger"
                                   color="danger"
@@ -482,7 +483,7 @@ export default function VenueSelection() {
               </div>
 
               <h2 className="text-lg font-semibold mb-3">Recent Events</h2>
-              
+
               {selectedVenueEvents.length === 0 ? (
                 <Card classNames={{ base: "bg-surface-deep/50 border border-default w-full" }}>
                   <CardBody className="text-center py-8 text-surface-light">
@@ -492,7 +493,7 @@ export default function VenueSelection() {
               ) : (
                 <div className="space-y-3">
                   {selectedVenueEvents.map((event) => (
-                    <Card 
+                    <Card
                       key={event.id}
                       isPressable
                       onPress={() => router.push(`/events/${event.id}/dispatch`)}
@@ -504,7 +505,7 @@ export default function VenueSelection() {
                         <div className="flex justify-between items-start w-full">
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-lg mb-2 truncate">{event.name || 'Untitled Event'}</h3>
-                            
+
                             <div className="space-y-1 text-sm text-surface-light">
                               <div className="flex items-center gap-2">
                                 <Calendar className="w-4 h-4" />
@@ -524,7 +525,7 @@ export default function VenueSelection() {
                               <Chip size="sm" color="warning" className="mt-2">Draft</Chip>
                             )}
                           </div>
-                          
+
                           <div
                             onClick={(e) => e.stopPropagation()}
                             onKeyDown={(e) => e.stopPropagation()}
@@ -540,14 +541,14 @@ export default function VenueSelection() {
                                 </button>
                               </DropdownTrigger>
                               <DropdownMenu aria-label="Event actions">
-                                <DropdownItem 
+                                <DropdownItem
                                   key="resume"
                                   startContent={<Play className="w-4 h-4" />}
                                   onPress={() => router.push(`/events/${event.id}/dispatch`)}
                                 >
                                   Resume
                                 </DropdownItem>
-                                <DropdownItem 
+                                <DropdownItem
                                   key="share"
                                   startContent={<Share2 className="w-4 h-4" />}
                                   onPress={() => setShareModalData({
@@ -559,7 +560,7 @@ export default function VenueSelection() {
                                 >
                                   Share
                                 </DropdownItem>
-                                <DropdownItem 
+                                <DropdownItem
                                   key="delete"
                                   className="text-danger"
                                   color="danger"
@@ -583,21 +584,21 @@ export default function VenueSelection() {
 
         {/* Modals */}
         {shareModalData && (
-        <ShareModal
-          isOpen={!!shareModalData}
-          onClose={() => setShareModalData(null)}
-          resourceId={shareModalData.id}
-          resourceName={shareModalData.name}
-          collectionName={shareModalData.type}
-          currentSharedWith={
-            shareModalData.type === 'venues'
-              ? venues.find(v => v.id === shareModalData.id)?.sharedWith || []
-              : recentEvents.find(e => e.id === shareModalData.id)?.sharedWith || []
-          }
-          onUpdate={() => {
-          }}
-        />
-      )}
+          <ShareModal
+            isOpen={!!shareModalData}
+            onClose={() => setShareModalData(null)}
+            resourceId={shareModalData.id}
+            resourceName={shareModalData.name}
+            collectionName={shareModalData.type}
+            currentSharedWith={
+              shareModalData.type === 'venues'
+                ? venues.find(v => v.id === shareModalData.id)?.sharedWith || []
+                : recentEvents.find(e => e.id === shareModalData.id)?.sharedWith || []
+            }
+            onUpdate={() => {
+            }}
+          />
+        )}
       </main>
     );
   }
@@ -606,7 +607,7 @@ export default function VenueSelection() {
   return (
     <main className="relative bg-surface-deepest text-white h-[calc(100vh-4rem)]">
       <DiagonalStreaksFixed />
-      
+
       <div className="relative z-10 pt-10 px-6">
         <div className="max-w-[1200px] mx-auto">
           <div className="mb-8">
@@ -646,37 +647,37 @@ export default function VenueSelection() {
                 {filteredVenues.map((venue) => {
                   const stats = venueStats.byVenue[venue.id];
                   const isSelected = selectedVenueId === venue.id;
-                  
+
                   return (
-                    <Card 
+                    <Card
                       key={venue.id}
                       classNames={{
-                        base: `${isSelected 
-                          ? 'bg-status-blue/20 border-status-blue' 
+                        base: `${isSelected
+                          ? 'bg-status-blue/20 border-status-blue'
                           : 'bg-surface-deep/50 border-default'
-                        } backdrop-blur-sm border-2 transition-all w-full`
+                          } backdrop-blur-sm border-2 transition-all w-full`
                       }}
                     >
-                      <div 
+                      <div
                         className="relative cursor-pointer"
                         onClick={() => setSelectedVenueId(venue.id)}
                       >
                         <CardBody className="pl-3 pr-1 relative">
-                        <div className="pr-8">
-                          <div className="flex items-center gap-2 mb-1">
-                            <MapPin className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-status-blue' : 'text-surface-light'}`} />
-                            <h3 className="font-semibold text-sm">{venue.name}</h3>
+                          <div className="pr-8">
+                            <div className="flex items-center gap-2 mb-1">
+                              <MapPin className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-status-blue' : 'text-surface-light'}`} />
+                              <h3 className="font-semibold text-sm">{venue.name}</h3>
+                            </div>
+                            <div className="text-xs text-surface-light">
+                              {stats.count} {stats.count === 1 ? 'event' : 'events'}
+                            </div>
+                            <div className="text-xs text-surface-light mt-1">
+                              {formatRelativeDate(stats.lastUsed)}
+                            </div>
                           </div>
-                          <div className="text-xs text-surface-light">
-                            {stats.count} {stats.count === 1 ? 'event' : 'events'}
-                          </div>
-                          <div className="text-xs text-surface-light mt-1">
-                            {formatRelativeDate(stats.lastUsed)}
-                          </div>
-                        </div>
                         </CardBody>
-                        
-                        <div 
+
+                        <div
                           className="absolute top-3 right-3 z-10"
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -691,14 +692,14 @@ export default function VenueSelection() {
                               </button>
                             </DropdownTrigger>
                             <DropdownMenu aria-label="Venue actions">
-                              <DropdownItem 
+                              <DropdownItem
                                 key="edit"
                                 startContent={<Edit className="w-4 h-4" />}
                                 onPress={() => router.push(`/venues/management?venueId=${venue.id}`)}
                               >
                                 Edit
                               </DropdownItem>
-                              <DropdownItem 
+                              <DropdownItem
                                 key="share"
                                 startContent={<Share2 className="w-4 h-4" />}
                                 onPress={() => setShareModalData({
@@ -710,7 +711,7 @@ export default function VenueSelection() {
                               >
                                 Share Venue
                               </DropdownItem>
-                              <DropdownItem 
+                              <DropdownItem
                                 key="delete"
                                 className="text-danger"
                                 color="danger"
@@ -786,7 +787,7 @@ export default function VenueSelection() {
                             </thead>
                             <tbody>
                               {selectedVenueEvents.map((event) => (
-                                <tr 
+                                <tr
                                   key={event.id}
                                   className="border-b border-default hover:bg-surface-deeper/50 cursor-pointer transition-colors"
                                   onClick={() => router.push(`/events/${event.id}/dispatch`)}
@@ -828,14 +829,14 @@ export default function VenueSelection() {
                                           </button>
                                         </DropdownTrigger>
                                         <DropdownMenu aria-label="Event actions">
-                                          <DropdownItem 
+                                          <DropdownItem
                                             key="resume"
                                             startContent={<Play className="w-4 h-4" />}
                                             onPress={() => router.push(`/events/${event.id}/dispatch`)}
                                           >
                                             Resume Event
                                           </DropdownItem>
-                                          <DropdownItem 
+                                          <DropdownItem
                                             key="share"
                                             startContent={<Share2 className="w-4 h-4" />}
                                             onPress={() => setShareModalData({
@@ -847,7 +848,7 @@ export default function VenueSelection() {
                                           >
                                             Share Event
                                           </DropdownItem>
-                                          <DropdownItem 
+                                          <DropdownItem
                                             key="delete"
                                             className="text-danger"
                                             color="danger"

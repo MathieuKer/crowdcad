@@ -25,7 +25,7 @@ import {
   Avatar,
 } from "@heroui/react";
 
-import { Menu, UserRound, Cog, LogOut } from "lucide-react";
+import { Menu, UserRound, LogOut } from "lucide-react";
 
 const LoginModalLazy = dynamic(() => import("@/components/modals/auth/loginmodal"), { ssr: false });
 
@@ -64,21 +64,21 @@ export default function AppNavbar() {
     { label: "Venues", href: "/venues/selection" },
   ];
 
-   const dispatchItems = [
-    { 
-      label: "Venue Map", 
+  const dispatchItems = [
+    {
+      label: "Venue Map",
       onClick: () => window.dispatchEvent(new CustomEvent('open-venue-map'))
     },
-    { 
-      label: "Posting Schedule", 
+    {
+      label: "Posting Schedule",
       onClick: () => window.dispatchEvent(new CustomEvent('open-posting-schedule'))
     },
-    { 
-      label: "End Event", 
+    {
+      label: "End Event",
       onClick: () => window.dispatchEvent(new CustomEvent('open-end-event'))
     },
-    { 
-      label: "Venues", 
+    {
+      label: "Venues",
       onClick: () => router.push('/venues/selection'),
       isActive: pathname === '/venues/selection'
     },
@@ -145,8 +145,8 @@ export default function AppNavbar() {
           </NavbarContent>
 
           {/* CENTER: desktop nav links */}
-          <NavbarContent 
-            className={`hidden lg:flex gap-8 ${!isDispatch ? 'max-w-[500px]' : ''}`} 
+          <NavbarContent
+            className={`hidden lg:flex gap-8 ${!isDispatch ? 'max-w-[500px]' : ''}`}
             justify="center"
           >
             {isDispatch ? (
@@ -155,9 +155,8 @@ export default function AppNavbar() {
                 <NavbarItem key={label}>
                   <button
                     onClick={onClick}
-                    className={`text-lg font-medium transition ${
-                      itemActive ? "text-surface-light" : "text-surface-light hover:text-accent"
-                    }`}
+                    className={`text-lg font-medium transition ${itemActive ? "text-surface-light" : "text-surface-light hover:text-accent"
+                      }`}
                   >
                     {label}
                   </button>
@@ -170,7 +169,7 @@ export default function AppNavbar() {
                   const aboutActive = pathname?.startsWith("/about");
                   return (
                     <Dropdown key={href}>
-                        <NavbarItem isActive={aboutActive}>
+                      <NavbarItem isActive={aboutActive}>
                         <DropdownTrigger>
                           <button
                             type="button"
@@ -213,9 +212,8 @@ export default function AppNavbar() {
                   <NavbarItem key={href} isActive={isActive(href)}>
                     <Link
                       href={href}
-                      className={`text-lg font-medium transition ${
-                        isActive(href) ? "text-surface-light" : "text-surface-faint hover:text-accent"
-                      }`}
+                      className={`text-lg font-medium transition ${isActive(href) ? "text-surface-light" : "text-surface-faint hover:text-accent"
+                        }`}
                     >
                       {label}
                     </Link>
@@ -239,11 +237,13 @@ export default function AppNavbar() {
             </div>
 
             {/* Show nothing while loading */}
-            {!ready ? (
+            {!ready && (
               <NavbarItem>
                 <div className="w-10 h-10" /> {/* Placeholder to prevent layout shift */}
               </NavbarItem>
-            ) : !user ? (
+            )}
+
+            {ready && !user && (
               <NavbarItem>
                 <Button
                   onClick={() => {
@@ -254,14 +254,15 @@ export default function AppNavbar() {
                   Log in
                 </Button>
               </NavbarItem>
-              
-            ) : (
-              <NavbarItem  className="hidden lg:flex">
+            )}
+
+            {ready && user && (
+              <NavbarItem className="hidden lg:flex">
                 {/* Profile dropdown */}
                 <Dropdown placement="bottom-end">
                   <DropdownTrigger>
-                    <button 
-                      aria-label="Open profile menu" 
+                    <button
+                      aria-label="Open profile menu"
                       className="relative p-0.5 rounded-full bg-gradient-to-br from-accent/70 to-[rgba(240,28,28,0.4)] cursor-pointer"
                     >
                       <Avatar
@@ -309,7 +310,7 @@ export default function AppNavbar() {
         {/* MOBILE MENU */}
         <NavbarMenu className="bg-surface-deep border-t border-surface-liner pt-6">
           {isDispatch ? (
-            dispatchItems.map(({ label, onClick}) => (
+            dispatchItems.map(({ label, onClick }) => (
               <NavbarMenuItem key={label}>
                 <button
                   onClick={() => {
@@ -331,9 +332,8 @@ export default function AppNavbar() {
                       <Link
                         href={href}
                         onClick={() => setIsMenuOpen(false)}
-                        className={`w-full text-lg font-medium transition ${
-                          isActive(href) ? "text-surface-light" : "text-surface-faint hover:text-accent"
-                        }`}
+                        className={`w-full text-lg font-medium transition ${isActive(href) ? "text-surface-light" : "text-surface-faint hover:text-accent"
+                          }`}
                       >
                         {label}
                       </Link>
@@ -347,15 +347,15 @@ export default function AppNavbar() {
                         Hosting & HIPAA
                       </Link>
                     </NavbarMenuItem>
-                      <NavbarMenuItem>
-                        <Link
-                          href="/about/firebase"
-                          onClick={() => setIsMenuOpen(false)}
-                          className="w-full text-lg font-medium transition text-surface-faint hover:text-accent pl-4"
-                        >
-                          Firebase Setup
-                        </Link>
-                      </NavbarMenuItem>
+                    <NavbarMenuItem>
+                      <Link
+                        href="/about/firebase"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="w-full text-lg font-medium transition text-surface-faint hover:text-accent pl-4"
+                      >
+                        Firebase Setup
+                      </Link>
+                    </NavbarMenuItem>
                   </div>
                 );
               }
@@ -364,9 +364,8 @@ export default function AppNavbar() {
                   <Link
                     href={href}
                     onClick={() => setIsMenuOpen(false)}
-                    className={`w-full text-lg font-medium transition ${
-                      isActive(href) ? "text-surface-light" : "text-surface-faint hover:text-accent"
-                    }`}
+                    className={`w-full text-lg font-medium transition ${isActive(href) ? "text-surface-light" : "text-surface-faint hover:text-accent"
+                      }`}
                   >
                     {label}
                   </Link>

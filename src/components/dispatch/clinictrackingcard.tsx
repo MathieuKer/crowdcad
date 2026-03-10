@@ -37,7 +37,7 @@ function useMMSS(since?: number) {
   return `${mm}:${ss}`;
 }
 
-function callBg(call: Call) {
+function callBg() {
   // Clinic calls always use default background
   return 'bg-surface-deep';
 }
@@ -52,7 +52,6 @@ export default function ClinicTrackingCard({
   onOutcomeChange,
   handleDeleteCall,
   formatAgeSex,
-  getCallRowClass,
   updateEvent,
 }: ClinicTrackingCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -64,7 +63,7 @@ export default function ClinicTrackingCard({
   const notesFocusedRef = useRef(false);
   const [logText, setLogText] = useState(() => {
     if (call.log && call.log.length > 0) {
-      return call.log.map((entry: {timestamp: number; message: string}) => entry.message).join('\n');
+      return call.log.map((entry: { timestamp: number; message: string }) => entry.message).join('\n');
     }
     return '';
   });
@@ -93,7 +92,7 @@ export default function ClinicTrackingCard({
   useEffect(() => {
     if (!logFocusedRef.current) {
       const newText = call.log && call.log.length > 0
-        ? call.log.map((entry: {timestamp: number; message: string}) => entry.message).join('\n')
+        ? call.log.map((entry: { timestamp: number; message: string }) => entry.message).join('\n')
         : '';
       setLogText(newText);
     }
@@ -108,7 +107,7 @@ export default function ClinicTrackingCard({
   }, [call.log]);
 
   const timer = useMMSS(callTimestamp);
-  const bg = callBg(call);
+  const bg = callBg();
 
   // Get primary team (first assigned team or first detached team)
   const primaryTeam = useMemo(() => {
@@ -124,14 +123,14 @@ export default function ClinicTrackingCard({
   return (
     <Card className={`rounded-2xl shadow-sm border-0 ${bg}`}>
       {/* HEADER */}
-      <CardHeader 
+      <CardHeader
         onClick={() => setExpanded(v => !v)}
         className="relative flex items-center justify-between px-4 py-3 pb-0 cursor-pointer select-none"
       >
         <div className="text-[15px] sm:text-base font-semibold text-surface-light">
           Call {callDisplayNumber}
         </div>
-        
+
         {/* Right section: Timer and Menu aligned horizontally */}
         <div className="absolute top-3 right-3 flex items-center gap-2">
           {/* Timer */}
@@ -152,13 +151,13 @@ export default function ClinicTrackingCard({
                 </button>
               </DropdownTrigger>
               <DropdownMenu aria-label="Call actions">
-                <DropdownItem 
+                <DropdownItem
                   key="showLog"
                   onPress={() => setExpanded(v => !v)}
                 >
                   {expanded ? 'Hide Log' : 'Show Log'}
                 </DropdownItem>
-                <DropdownItem 
+                <DropdownItem
                   key="delete"
                   className="text-danger"
                   color="danger"
@@ -312,7 +311,7 @@ export default function ClinicTrackingCard({
                   const text = notesText;
                   if ((call.notes || '') !== text) {
                     const updatedCall = { ...call, notes: text };
-                    const updated = event.calls.map((c: Call) => 
+                    const updated = event.calls.map((c: Call) =>
                       c.id === call.id ? updatedCall : c
                     );
                     await updateEvent({ calls: updated });
@@ -343,16 +342,16 @@ export default function ClinicTrackingCard({
                 onBlur={async () => {
                   logFocusedRef.current = false;
                   const text = logText;
-                  
+
                   // Convert text back to log entries
                   const lines = text.split('\n').filter(line => line.trim());
                   const newLog = lines.map(line => ({
                     timestamp: Date.now(),
                     message: line
                   }));
-                  
+
                   const updatedCall = { ...call, log: newLog };
-                  const updated = event.calls.map((c: Call) => 
+                  const updated = event.calls.map((c: Call) =>
                     c.id === call.id ? updatedCall : c
                   );
                   await updateEvent({ calls: updated });

@@ -53,6 +53,12 @@ npm run dev
 
 4. For Firebase configuration, follow the instructions in [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md). The runtime initializer is at `src/app/firebase.ts`.
 
+#### Default Credentials
+
+Pour se connecter par défaut après avoir lancé le projet, utilisez les identifiants suivants :
+- **Email :** `test@test.test`
+- **Mot de passe :** `Allo1234`
+
 Environment example
 
 Copy `.env.example` to `.env.local` and fill your Firebase values. Pour le développement, tu peux utiliser ces variables de configuration Firebase :

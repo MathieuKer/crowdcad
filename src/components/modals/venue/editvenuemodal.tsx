@@ -216,40 +216,47 @@ export default function EditVenueModal({ venueId, onClose, onSaved }: Props) {
     setVenueData((prev) => ({ ...prev, posts: [...prev.posts, newPost] }));
   };
 
+  const handleMarkerMove = (idx: number, x: number, y: number) => {
+    setVenueData((prev) => {
+      const copy = [...prev.posts];
+      const cur = copy[idx];
+      if (typeof cur === 'string') return prev;
+      copy[idx] = { ...cur, x, y };
+      return { ...prev, posts: copy };
+    });
+  };
+
   // Drag markers (matching CreateVenueModal)
-  const onMarkerMouseDown =
-    (idx: number) => (evt: React.MouseEvent) => {
-      evt.preventDefault();
-      evt.stopPropagation();
-      setDraggingIdx(idx);
-      const img = imgRef.current;
-      if (!img) return;
+  const onMarkerMouseDown = (idx: number, evt: React.MouseEvent) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    setDraggingIdx(idx);
+    const img = imgRef.current;
+    if (!img) return;
 
-      const rect = img.getBoundingClientRect();
+    const rect = img.getBoundingClientRect();
 
-      const onMove = (e: MouseEvent) => {
-        const nx = ((e.clientX - rect.left) / rect.width) * 100;
-        const ny = ((e.clientY - rect.top) / rect.height) * 100;
-        const x = Math.max(0, Math.min(100, nx));
-        const y = Math.max(0, Math.min(100, ny));
-        setVenueData((prev) => {
-          const copy = [...prev.posts];
-          const cur = copy[idx];
-          if (typeof cur === 'string') return prev;
-          copy[idx] = { ...cur, x, y };
-          return { ...prev, posts: copy };
-        });
-      };
-
-      const onUp = () => {
-        setDraggingIdx(null);
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-      };
-
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
+    const onMove = (e: MouseEvent) => {
+      const nx = ((e.clientX - rect.left) / rect.width) * 100;
+      const ny = ((e.clientY - rect.top) / rect.height) * 100;
+      const x = Math.max(0, Math.min(100, nx));
+      const y = Math.max(0, Math.min(100, ny));
+      handleMarkerMove(idx, x, y);
     };
+
+    const onUp = () => {
+      setDraggingIdx(null);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const handleMouseLeaveMarker = (idx: number) => {
+    setHoverId((cur) => (cur === idx ? null : cur));
+  };
 
   const renderMarkers = () => {
     return venueData.posts
@@ -270,8 +277,8 @@ export default function EditVenueModal({ venueId, onClose, onSaved }: Props) {
               className="pointer-events-auto h-4 w-4 rounded-full border-2 border-white bg-status-blue shadow cursor-move"
               title={post.name}
               onMouseEnter={() => setHoverId(idx)}
-              onMouseLeave={() => setHoverId((cur) => (cur === idx ? null : cur))}
-              onMouseDown={onMarkerMouseDown(idx)}
+              onMouseLeave={() => handleMouseLeaveMarker(idx)}
+              onMouseDown={(e) => onMarkerMouseDown(idx, e)}
               onDoubleClick={() => renamePost(idx)}
               onClick={(e) => {
                 e.preventDefault();
@@ -362,9 +369,9 @@ export default function EditVenueModal({ venueId, onClose, onSaved }: Props) {
       console.error('Error saving venue:', error);
       const message =
         typeof error === 'object' &&
-        error !== null &&
-        'message' in error &&
-        typeof (error as { message?: unknown }).message === 'string'
+          error !== null &&
+          'message' in error &&
+          typeof (error as { message?: unknown }).message === 'string'
           ? (error as { message: string }).message
           : 'Unknown error';
       alert(
@@ -515,27 +522,26 @@ export default function EditVenueModal({ venueId, onClose, onSaved }: Props) {
                 <div className="flex flex-wrap gap-2">
                   {venueData.posts.map((post, idx) => {
                     const label = typeof post === 'string' ? post : post.name;
-                    
+
                     // 1. Narrowing check: Determine if coordinates are definitely numbers.
-                    const hasCoordinates = 
-                      typeof post === 'object' && 
-                      post !== null && 
-                      post.x !== null && 
+                    const hasCoordinates =
+                      typeof post === 'object' &&
+                      post !== null &&
+                      post.x !== null &&
                       post.y !== null;
 
                     // 2. Safe Key Generation: Use type assertion/casting within the safe block
                     const postKey = hasCoordinates
                       ? // We can now safely cast post.x and post.y to number because of the check above.
-                        `p-${idx}-${post.name}-${Math.round(post.x as number)}-${Math.round(post.y as number)}`
+                      `p-${idx}-${post.name}-${Math.round(post.x as number)}-${Math.round(post.y as number)}`
                       : // Fallback key
-                        `t-${idx}-${label}`; 
+                      `t-${idx}-${label}`;
 
                     return (
                       <span
                         key={postKey} // Use the new safe key
-                        className={`inline-flex items-center gap-1 rounded-full px-2 text-sm ${
-                          hasCoordinates ? 'bg-status-blue/20 text-status-blue' : 'bg-surface-deep'
-                        }`}
+                        className={`inline-flex items-center gap-1 rounded-full px-2 text-sm ${hasCoordinates ? 'bg-status-blue/20 text-status-blue' : 'bg-surface-deep'
+                          }`}
                         title={label}
                       >
                         <button

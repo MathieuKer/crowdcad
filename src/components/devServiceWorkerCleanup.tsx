@@ -12,10 +12,10 @@ export default function DevServiceWorkerCleanup() {
         try {
           r.unregister();
         } catch (e) {
-          // ignore
+          console.error("Service worker unregister failed", e);
         }
       });
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   return null;

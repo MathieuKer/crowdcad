@@ -117,6 +117,13 @@ export default function EndEventModal({
     variant?: 'default' | 'danger' | 'primary';
     disabled?: boolean;
   }) => {
+    let ringClass = '';
+    if (checked) {
+      if (variant === 'danger') ringClass = 'ring-1 ring-status-red/50';
+      else if (variant === 'primary') ringClass = 'ring-1 ring-status-blue/50';
+      else ringClass = 'ring-1 ring-white/20';
+    }
+
     return (
       <label
         className={clsx(
@@ -124,11 +131,7 @@ export default function EndEventModal({
           'border border-surface',
           'bg-surface-deep hover:bg-surface-deep/70',
           disabled && 'opacity-50 cursor-not-allowed hover:bg-surface-deep',
-          checked && (variant === 'danger'
-            ? 'ring-1 ring-status-red/50'
-            : variant === 'primary'
-              ? 'ring-1 ring-status-blue/50'
-              : 'ring-1 ring-white/20')
+          ringClass
         )}
       >
         <div className="flex items-center gap-4">
@@ -212,7 +215,11 @@ export default function EndEventModal({
             onClick={handleContinue}
             disabled={!canContinue || !!busy}
           >
-            {busy === 'quick' ? 'Generating summary...' : busy === 'none' ? 'Ending event...' : 'Continue'}
+            {(() => {
+              if (busy === 'quick') return 'Generating summary...';
+              if (busy === 'none') return 'Ending event...';
+              return 'Continue';
+            })()}
           </Button>
         </ModalFooter>
       </ModalContent>

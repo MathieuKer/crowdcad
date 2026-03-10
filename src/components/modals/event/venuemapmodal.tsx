@@ -2,8 +2,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
-import { Modal, ModalContent, ModalBody, Button, Card, Tooltip } from '@heroui/react';
-import { ZoomIn, ZoomOut, RotateCcw, MapPin, Cross, ShieldPlus, Briefcase, HousePlus } from 'lucide-react';
+import { Modal, ModalContent, ModalBody, Button, Card } from '@heroui/react';
+import { ZoomIn, ZoomOut, RotateCcw, MapPin, ShieldPlus, Briefcase, HousePlus } from 'lucide-react';
 import { Post, Staff, Equipment, Layer } from '@/app/types';
 
 function StatusTimer({ since }: { since: number }) {
@@ -49,21 +49,10 @@ interface PostMarkerProps {
   staff: Staff[];
 }
 
-function PostMarker({ post, rect }: PostMarkerProps) {
+function useHoverTooltip() {
   const [hovered, setHovered] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const markerRef = useRef<HTMLDivElement>(null);
-  if (!isPostObject(post)) return null;
-
-  const { x, y, width, height } = rect;
-  const left = x + (post.x / 100) * width;
-  const top = y + (post.y / 100) * height;
-  
-  // Check if this is a clinic location
-  const isClinic = post.name.toLowerCase().includes('clinic');
-  const Icon = isClinic ? HousePlus : MapPin;
-  const size = isClinic ? 'h-5 w-5' : 'h-4 w-4';
-  const containerSize = isClinic ? 'h-7 w-7' : 'h-6 w-6';
 
   const handleMouseEnter = () => {
     setHovered(true);
@@ -73,6 +62,23 @@ function PostMarker({ post, rect }: PostMarkerProps) {
       setTooltipPos({ x: rect.right + 10, y: yPos });
     }
   };
+
+  return { hovered, setHovered, tooltipPos, markerRef, handleMouseEnter };
+}
+
+function PostMarker({ post, rect }: PostMarkerProps) {
+  const { hovered, setHovered, tooltipPos, markerRef, handleMouseEnter } = useHoverTooltip();
+  if (!isPostObject(post)) return null;
+
+  const { x, y, width, height } = rect;
+  const left = x + (post.x / 100) * width;
+  const top = y + (post.y / 100) * height;
+
+  // Check if this is a clinic location
+  const isClinic = post.name.toLowerCase().includes('clinic');
+  const Icon = isClinic ? HousePlus : MapPin;
+  const size = isClinic ? 'h-5 w-5' : 'h-4 w-4';
+  const containerSize = isClinic ? 'h-7 w-7' : 'h-6 w-6';
 
   return (
     <div
@@ -93,8 +99,8 @@ function PostMarker({ post, rect }: PostMarkerProps) {
 
       {/* Hover tooltip with fixed positioning using portal */}
       {hovered && typeof window !== 'undefined' && createPortal(
-        <div 
-          style={{ 
+        <div
+          style={{
             position: 'fixed',
             left: `${tooltipPos.x}px`,
             top: `${tooltipPos.y}px`,
@@ -112,31 +118,11 @@ function PostMarker({ post, rect }: PostMarkerProps) {
   );
 }
 
-function getEquipmentMarkerColors(equipment: Equipment) {
-  let color = '#8B5CF6'; // Purple for default
-  const outline = '2px solid white';
 
-  switch (equipment.status) {
-    case 'Available':
-      color = '#10B981'; // Green
-      break;
-    case 'En Route to Call':
-      color = '#F59E0B'; // Amber
-      break;
-    case 'Transporting Patient':
-      color = '#EF4444'; // Red
-      break;
-    case 'Out of Service':
-      color = '#6B7280'; // Gray
-      break;
-  }
-
-  return { color, outline };
-}
 
 function getEquipmentIcon(equipment: Equipment) {
   const name = equipment.name.toLowerCase();
-  
+
   // Specific equipment type icons
   if (name.includes('wheelchair')) {
     // Using a custom wheelchair SVG path since we don't have hugeicons in lucide
@@ -148,30 +134,36 @@ function getEquipmentIcon(equipment: Equipment) {
   if (name.includes('aed')) {
     return 'aed';
   }
-  
+
   return 'briefcase'; // Default medical briefcase
 }
 
 function EquipmentIcon({ type, className }: { type: string; className?: string }) {
   if (type === 'wheelchair') {
     return (
-      <img 
-        src="/map/wheelchair.svg" 
-        alt="Wheelchair" 
+      <Image
+        src="/map/wheelchair.svg"
+        alt="Wheelchair"
         className={className}
+        width={100}
+        height={100}
         style={{ width: '100%', height: '100%' }}
         draggable={false}
+        unoptimized
       />
     );
   }
   if (type === 'stretcher') {
     return (
-      <img 
-        src="/map/gurney.svg" 
-        alt="Gurney" 
+      <Image
+        src="/map/gurney.svg"
+        alt="Gurney"
         className={className}
+        width={100}
+        height={100}
         style={{ width: '100%', height: '100%' }}
         draggable={false}
+        unoptimized
       />
     );
   }
@@ -215,9 +207,7 @@ function EquipmentMarker({
   post,
   rect,
 }: EquipmentMarkerProps) {
-  const [hovered, setHovered] = useState(false);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  const markerRef = useRef<HTMLDivElement>(null);
+  const { hovered, setHovered, tooltipPos, markerRef, handleMouseEnter } = useHoverTooltip();
 
   const postIsValid = isPostObject(post);
   if (!postIsValid) return null;
@@ -227,15 +217,6 @@ function EquipmentMarker({
   const top = rect.y + (post.y / 100) * rect.height + 15;
 
   const iconType = getEquipmentIcon(equipment);
-
-  const handleMouseEnter = () => {
-    setHovered(true);
-    if (markerRef.current) {
-      const rect = markerRef.current.getBoundingClientRect();
-      const yPos = Math.max(10, rect.top);
-      setTooltipPos({ x: rect.right + 10, y: yPos });
-    }
-  };
 
   return (
     <div
@@ -281,8 +262,8 @@ function EquipmentMarker({
       </div>
       {/* Hover tooltip with fixed positioning using portal */}
       {hovered && typeof window !== 'undefined' && createPortal(
-        <div 
-          style={{ 
+        <div
+          style={{
             position: 'fixed',
             left: `${tooltipPos.x}px`,
             top: `${tooltipPos.y}px`,
@@ -321,20 +302,8 @@ function getTeamMarkerColors(team: Staff) {
     color = 'red';
   }
 
-  // if (team.sam) {
-  //   outline = '2px solid red';
-  // }
-
   return { color, outline };
 }
-
-// function getTeamMarkerText(team: Staff) {
-//   if (team.sam && /^SAM\d+$/.test(team.team)) {
-//     const number = team.team.replace('SAM', '');
-//     return `S${number}`;
-//   }
-//   return team.team.slice(-1);
-// }
 
 interface TeamMarkerProps {
   team: Staff;
@@ -349,9 +318,7 @@ function TeamMarker({
   rect,
   teamTimers,
 }: TeamMarkerProps) {
-  const [hovered, setHovered] = useState(false);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  const markerRef = useRef<HTMLDivElement>(null);
+  const { hovered, setHovered, tooltipPos, markerRef, handleMouseEnter } = useHoverTooltip();
 
   const postIsValid = isPostObject(post);
   if (!postIsValid) return null;
@@ -361,16 +328,6 @@ function TeamMarker({
   const top = rect.y + (post.y / 100) * rect.height - 16;
 
   const { color } = getTeamMarkerColors(team);
-
-  const handleMouseEnter = () => {
-    setHovered(true);
-    if (markerRef.current) {
-      const rect = markerRef.current.getBoundingClientRect();
-      // Add 10px buffer from top of screen to prevent clipping
-      const yPos = Math.max(10, rect.top);
-      setTooltipPos({ x: rect.right + 10, y: yPos });
-    }
-  };
 
   return (
     <div
@@ -408,8 +365,8 @@ function TeamMarker({
       </div>
       {/* Hover card with fixed positioning using portal */}
       {hovered && typeof window !== 'undefined' && createPortal(
-        <div 
-          style={{ 
+        <div
+          style={{
             position: 'fixed',
             left: `${tooltipPos.x}px`,
             top: `${tooltipPos.y}px`,
@@ -480,78 +437,58 @@ function VenueMapWithPosts({
   const mapUrl = layers[currentLayer]?.mapUrl || '';
   const posts = layers[currentLayer]?.posts || [];
 
+  const measureContainerSize = React.useCallback(() => {
+    if (containerRef.current) {
+      setContainerSize({
+        width: containerRef.current.clientWidth,
+        height: containerRef.current.clientHeight,
+      });
+    }
+  }, []);
+
   // Update container size when component mounts and on resize
   useEffect(() => {
-    function updateContainerSize() {
-      if (containerRef.current) {
-        const newSize = {
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        };
-        setContainerSize(newSize);
-      }
-    }
-    
     const updateWithDelay = () => {
-      updateContainerSize();
+      measureContainerSize();
       requestAnimationFrame(() => {
-        updateContainerSize();
-        setTimeout(updateContainerSize, 10);
-        setTimeout(updateContainerSize, 50);
+        measureContainerSize();
+        setTimeout(measureContainerSize, 10);
+        setTimeout(measureContainerSize, 50);
       });
     };
-    
+
     updateWithDelay();
-    
-    window.addEventListener("resize", updateContainerSize);
-    return () => window.removeEventListener("resize", updateContainerSize);
-  }, []);
+
+    window.addEventListener("resize", measureContainerSize);
+    return () => window.removeEventListener("resize", measureContainerSize);
+  }, [measureContainerSize]);
 
   // Re-measure container when modal opens (for initial render)
   useEffect(() => {
     if (!isOpen) return;
-    
-    const measureContainer = () => {
-      if (containerRef.current) {
-        setContainerSize({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        });
-      }
-    };
-    
+
     const timers = [
-      setTimeout(measureContainer, 0),
-      setTimeout(measureContainer, 10),
-      setTimeout(measureContainer, 50),
-      setTimeout(measureContainer, 100),
+      setTimeout(measureContainerSize, 0),
+      setTimeout(measureContainerSize, 10),
+      setTimeout(measureContainerSize, 50),
+      setTimeout(measureContainerSize, 100),
     ];
-    
+
     return () => timers.forEach(clearTimeout);
-  }, [isOpen, mapUrl]);
+  }, [isOpen, mapUrl, measureContainerSize]);
 
   function handleImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
     const img = e.currentTarget;
     setNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
     setImageLoaded(true);
     onNaturalSize?.(img.naturalWidth, img.naturalHeight);
-    
-    const measureAfterImageLoad = () => {
-      if (containerRef.current) {
-        const newSize = {
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        };
-        setContainerSize(newSize);
-      }
-    };
-    
-    measureAfterImageLoad();
-    
+
+    measureContainerSize();
+
     requestAnimationFrame(() => {
-      measureAfterImageLoad();
-      setTimeout(measureAfterImageLoad, 10);
-      setTimeout(measureAfterImageLoad, 50);
+      measureContainerSize();
+      setTimeout(measureContainerSize, 10);
+      setTimeout(measureContainerSize, 50);
     });
   }
 
@@ -562,31 +499,22 @@ function VenueMapWithPosts({
     naturalSize.height
   );
 
-  const shouldRenderMarkers = imageLoaded && 
-    rect.width > 0 && 
-    rect.height > 0 && 
-    containerSize.width > 0 && 
+  const shouldRenderMarkers = imageLoaded &&
+    rect.width > 0 &&
+    rect.height > 0 &&
+    containerSize.width > 0 &&
     containerSize.height > 0 &&
-    naturalSize.width > 0 && 
+    naturalSize.width > 0 &&
     naturalSize.height > 0;
 
   useEffect(() => {
     if (shouldRenderMarkers && containerRef.current) {
-      const measureOnce = () => {
-        if (containerRef.current) {
-          setContainerSize({
-            width: containerRef.current.clientWidth,
-            height: containerRef.current.clientHeight,
-          });
-        }
-      };
-      
-      setTimeout(measureOnce, 5);
+      setTimeout(measureContainerSize, 5);
     }
-  }, [shouldRenderMarkers]);
+  }, [shouldRenderMarkers, measureContainerSize]);
 
   return (
-    <div 
+    <div
       className="relative h-full w-full"
       style={{
         height: '100%',
@@ -603,75 +531,75 @@ function VenueMapWithPosts({
           width: '100%',
         }}
       >
-      <div
-        ref={containerRef}
-        className="relative"
-        style={{
-          transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-          transformOrigin: 'center center',
-          transition: isPanning ? 'none' : 'transform 0.1s ease-out',
-          width: '100%',
-          height: '100%',
-        }}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
-      >
-        <Image
-          ref={imgRef}
-          src={mapUrl}
-          alt="Venue Map"
-          width={1200}
-          height={800}
-          style={{ width: '100%', height: '100%', objectFit: 'contain', userSelect: 'none' }}
-          unoptimized
-          onLoad={handleImageLoad}
-          draggable={false}
-          onDragStart={(e) => e.preventDefault()}
-        />
-        {shouldRenderMarkers && (
-          <>
-            {posts.map((post, i) => (
-              <PostMarker
-                key={i}
-                post={post}
-                rect={rect}
-                staff={staff}
-              />
-            ))}
-            {equipment.map((equip) => {
-              const postObj = posts.find(p => (typeof p === "string" ? p : p.name) === equip.location);
-              if (!postObj || typeof postObj === "string") {
-                return null;
-              }
-
-              return (
-                <EquipmentMarker
-                  key={equip.id}
-                  equipment={equip}
-                  post={postObj}
+        <div
+          ref={containerRef}
+          className="relative"
+          style={{
+            transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+            transformOrigin: 'center center',
+            transition: isPanning ? 'none' : 'transform 0.1s ease-out',
+            width: '100%',
+            height: '100%',
+          }}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={onMouseUp}
+        >
+          <Image
+            ref={imgRef}
+            src={mapUrl}
+            alt="Venue Map"
+            width={1200}
+            height={800}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', userSelect: 'none' }}
+            unoptimized
+            onLoad={handleImageLoad}
+            draggable={false}
+            onDragStart={(e) => e.preventDefault()}
+          />
+          {shouldRenderMarkers && (
+            <>
+              {posts.map((post, i) => (
+                <PostMarker
+                  key={i}
+                  post={post}
                   rect={rect}
+                  staff={staff}
                 />
-              );
-            })}
-            {staff.map((team) => {
-              const postObj = posts.find(p => (typeof p === "string" ? p : p.name) === team.location);
-              if (!postObj || typeof postObj === "string") return null;
+              ))}
+              {equipment.map((equip) => {
+                const postObj = posts.find(p => (typeof p === "string" ? p : p.name) === equip.location);
+                if (!postObj || typeof postObj === "string") {
+                  return null;
+                }
 
-              return (
-                <TeamMarker
-                  key={team.team}
-                  team={team}
-                  post={postObj}
-                  rect={rect}
-                  teamTimers={teamTimers}
-                />
-              );
-            })}
-          </>
-        )}
-      </div>
+                return (
+                  <EquipmentMarker
+                    key={equip.id}
+                    equipment={equip}
+                    post={postObj}
+                    rect={rect}
+                  />
+                );
+              })}
+              {staff.map((team) => {
+                const postObj = posts.find(p => (typeof p === "string" ? p : p.name) === team.location);
+                if (!postObj || typeof postObj === "string") return null;
+
+                return (
+                  <TeamMarker
+                    key={team.team}
+                    team={team}
+                    post={postObj}
+                    rect={rect}
+                    teamTimers={teamTimers}
+                  />
+                );
+              })}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -710,7 +638,7 @@ export default function VenueMapModal({
       const maxHeight = viewportHeight * 0.75; // 90% of viewport height
       setModalHeight(maxHeight);
     };
-    
+
     calculateHeight();
     window.addEventListener('resize', calculateHeight);
     return () => window.removeEventListener('resize', calculateHeight);
@@ -785,37 +713,37 @@ export default function VenueMapModal({
     setIsPanning(false);
   };
 
-  const mapFileName = layers[currentLayer]?.mapUrl 
+  const mapFileName = layers[currentLayer]?.mapUrl
     ? (() => {
-        try {
-          const url = layers[currentLayer].mapUrl!;
-          const u = new URL(url);
-          const filename = u.pathname.split('/').pop() || '';
-          const parts = filename.split('_');
-          if (parts.length > 1) {
-            return decodeURIComponent(parts.slice(1).join('_'));
-          } else {
-            return decodeURIComponent(filename);
-          }
-        } catch {
-          const url = layers[currentLayer].mapUrl!;
-          const s = url.split('?')[0];
-          const filename = s.substring(s.lastIndexOf('/') + 1);
-          const parts = filename.split('_');
-          if (parts.length > 1) {
-            return decodeURIComponent(parts.slice(1).join('_'));
-          } else {
-            return decodeURIComponent(filename);
-          }
+      try {
+        const url = layers[currentLayer].mapUrl!;
+        const u = new URL(url);
+        const filename = u.pathname.split('/').pop() || '';
+        const parts = filename.split('_');
+        if (parts.length > 1) {
+          return decodeURIComponent(parts.slice(1).join('_'));
+        } else {
+          return decodeURIComponent(filename);
         }
-      })()
+      } catch {
+        const url = layers[currentLayer].mapUrl!;
+        const s = url.split('?')[0];
+        const filename = s.substring(s.lastIndexOf('/') + 1);
+        const parts = filename.split('_');
+        if (parts.length > 1) {
+          return decodeURIComponent(parts.slice(1).join('_'));
+        } else {
+          return decodeURIComponent(filename);
+        }
+      }
+    })()
     : '';
 
   // Bottom bar height ~60px (kept as note for future layout adjustments)
 
   return (
-    <Modal 
-      isOpen={isOpen} 
+    <Modal
+      isOpen={isOpen}
       onClose={onClose}
       size="3xl"
       placement="center"
@@ -829,9 +757,9 @@ export default function VenueMapModal({
         maxHeight: modalHeight > 0 ? `${modalHeight}px` : '85vh',
       }}
     >
-      <ModalContent style={{ 
+      <ModalContent style={{
         height: modalHeight > 0 ? `${modalHeight}px` : '85vh',
-        maxHeight: modalHeight > 0 ? `${modalHeight}px` : '85vh' 
+        maxHeight: modalHeight > 0 ? `${modalHeight}px` : '85vh'
       }}>
         <ModalBody className="p-6 flex flex-col" style={{ height: '100%' }}>
           <div className="flex flex-col gap-3" style={{ height: '100%' }}>

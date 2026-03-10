@@ -30,9 +30,9 @@ interface AssignmentDropdownProps {
   time: string;
 }
 
-const AssignmentDropdown = React.memo(function AssignmentDropdown({ 
-  value, 
-  onChange, 
+const AssignmentDropdown = React.memo(function AssignmentDropdown({
+  value,
+  onChange,
   options,
   postKey,
   time,
@@ -99,6 +99,109 @@ function getPostKey(post: string | { name: string; }): string {
   return post.name;
 }
 
+function processAutofillTimePoint(
+  time: string,
+  timeIndex: number,
+  sortedTimes: string[],
+  posts: (string | { name: string })[],
+  staffTeams: string[],
+  updatedAssignments: { [time: string]: { [post: string]: string } },
+  teamPostHistory: { [team: string]: Set<string> },
+  teamPostAtTime: { [time: string]: { [team: string]: string } }
+) {
+  const currentlyAssigned = new Set<string>();
+
+  posts.forEach(post => {
+    const postKey = getPostKey(post);
+    const assignment = updatedAssignments[time][postKey];
+    if (assignment && assignment !== "" && assignment !== "Unassigned") {
+      currentlyAssigned.add(assignment);
+    }
+  });
+
+  const availableTeams = staffTeams.filter(team => !currentlyAssigned.has(team));
+  const unassignedPosts = posts.filter(post => {
+    const postKey = getPostKey(post);
+    const assignment = updatedAssignments[time][postKey];
+    return !assignment || assignment === "" || assignment === "Unassigned";
+  });
+
+  if (availableTeams.length === 0 || unassignedPosts.length === 0) return;
+
+  const postTeamOptions = unassignedPosts.map(post => {
+    const postKey = getPostKey(post);
+    const neverBeenHere: string[] = [];
+    const beenHereButCompletedRotation: string[] = [];
+    const beenHereButNotAdjacent: string[] = [];
+    const wouldBeAdjacent: string[] = [];
+
+    availableTeams.forEach(team => {
+      const hasBeenHere = teamPostHistory[team].has(postKey);
+      const hasCompletedRotation = teamPostHistory[team].size >= posts.length;
+
+      let isAdjacent = false;
+      const prevTimeIndex = timeIndex - 1;
+      const nextTimeIndex = timeIndex + 1;
+
+      if (prevTimeIndex >= 0) {
+        const prevTime = sortedTimes[prevTimeIndex];
+        const prevPost = teamPostAtTime[prevTime]?.[team];
+        if (prevPost === postKey) isAdjacent = true;
+      }
+
+      if (nextTimeIndex < sortedTimes.length) {
+        const nextTime = sortedTimes[nextTimeIndex];
+        const nextPost = teamPostAtTime[nextTime]?.[team];
+        if (nextPost === postKey) isAdjacent = true;
+      }
+
+      if (!hasBeenHere) {
+        if (isAdjacent) wouldBeAdjacent.push(team);
+        else neverBeenHere.push(team);
+      } else if (hasCompletedRotation) {
+        if (isAdjacent) wouldBeAdjacent.push(team);
+        else beenHereButCompletedRotation.push(team);
+      } else {
+        if (isAdjacent) wouldBeAdjacent.push(team);
+        else beenHereButNotAdjacent.push(team);
+      }
+    });
+
+    return {
+      postKey,
+      neverBeenHere,
+      beenHereButCompletedRotation,
+      beenHereButNotAdjacent,
+      wouldBeAdjacent
+    };
+  });
+
+  postTeamOptions.sort((a, b) => {
+    const aNonAdjacentOptions = a.neverBeenHere.length + a.beenHereButCompletedRotation.length + a.beenHereButNotAdjacent.length;
+    const bNonAdjacentOptions = b.neverBeenHere.length + b.beenHereButCompletedRotation.length + b.beenHereButNotAdjacent.length;
+    if (aNonAdjacentOptions !== bNonAdjacentOptions) return aNonAdjacentOptions - bNonAdjacentOptions;
+    return b.neverBeenHere.length - a.neverBeenHere.length;
+  });
+
+  const usedTeams = new Set<string>();
+
+  postTeamOptions.forEach(({ postKey, neverBeenHere, beenHereButCompletedRotation, beenHereButNotAdjacent, wouldBeAdjacent }) => {
+    let assignedTeam: string | null = null;
+
+    assignedTeam = neverBeenHere.find(team => !usedTeams.has(team)) || null;
+    if (!assignedTeam) assignedTeam = beenHereButCompletedRotation.find(team => !usedTeams.has(team)) || null;
+    if (!assignedTeam) assignedTeam = beenHereButNotAdjacent.find(team => !usedTeams.has(team)) || null;
+    if (!assignedTeam) assignedTeam = wouldBeAdjacent.find(team => !usedTeams.has(team)) || null;
+
+    if (assignedTeam) {
+      updatedAssignments[time][postKey] = assignedTeam;
+      usedTeams.add(assignedTeam);
+      teamPostHistory[assignedTeam].add(postKey);
+      teamPostAtTime[time][assignedTeam] = postKey;
+    }
+  });
+}
+
 export default function PostingScheduleModal({
   isOpen,
   onClose,
@@ -115,7 +218,7 @@ export default function PostingScheduleModal({
 
   // Find the index of the current active time
   const activeTime = getCurrentActiveTime();
-  
+
   // Memoize times to prevent creating a new array reference on every render.
   // If `event.postingTimes` is empty, fall back to keys from `postAssignments` so
   // the table still renders columns when times were saved in assignments but
@@ -172,20 +275,20 @@ export default function PostingScheduleModal({
 
   const handleAutofill = async () => {
     if (!event) return;
-    
+
     const times = event.postingTimes || [];
     const posts = event.eventPosts || [];
     const staffTeams = event.staff?.map(team => team.team) || [];
-    
+
     if (!times.length || !posts.length || !staffTeams.length) return;
 
     const updatedAssignments: { [time: string]: { [post: string]: string } } = {};
-    
+
     times.forEach(time => {
       updatedAssignments[time] = { ...(postAssignments?.[time] || {}) };
     });
 
-    const isCompletelyEmpty = times.every(time => 
+    const isCompletelyEmpty = times.every(time =>
       posts.every(post => {
         const postKey = getPostKey(post);
         const assignment = postAssignments?.[time]?.[postKey];
@@ -235,145 +338,10 @@ export default function PostingScheduleModal({
       const sortedTimes = [...times];
 
       sortedTimes.forEach((time, timeIndex) => {
-        const currentlyAssigned = new Set<string>();
-        const currentAssignmentsByTeam: { [team: string]: string } = {};
-        
-        posts.forEach(post => {
-          const postKey = getPostKey(post);
-          const assignment = updatedAssignments[time][postKey];
-          if (assignment && assignment !== "" && assignment !== "Unassigned") {
-            currentlyAssigned.add(assignment);
-            currentAssignmentsByTeam[assignment] = postKey;
-          }
-        });
-
-        const availableTeams = staffTeams.filter(team => !currentlyAssigned.has(team));
-        const unassignedPosts = posts.filter(post => {
-          const postKey = getPostKey(post);
-          const assignment = updatedAssignments[time][postKey];
-          return !assignment || assignment === "" || assignment === "Unassigned";
-        });
-
-        if (availableTeams.length > 0 && unassignedPosts.length > 0) {
-          const postTeamOptions: { 
-            postKey: string; 
-            neverBeenHere: string[]; 
-            beenHereButCompletedRotation: string[];
-            beenHereButNotAdjacent: string[];
-            wouldBeAdjacent: string[];
-          }[] = [];
-          
-          unassignedPosts.forEach(post => {
-            const postKey = getPostKey(post);
-            const neverBeenHere: string[] = [];
-            const beenHereButCompletedRotation: string[] = [];
-            const beenHereButNotAdjacent: string[] = [];
-            const wouldBeAdjacent: string[] = [];
-            
-            availableTeams.forEach(team => {
-              const hasBeenHere = teamPostHistory[team].has(postKey);
-              const hasCompletedRotation = teamPostHistory[team].size >= posts.length;
-              
-              let isAdjacent = false;
-              const prevTimeIndex = timeIndex - 1;
-              const nextTimeIndex = timeIndex + 1;
-              
-              if (prevTimeIndex >= 0) {
-                const prevTime = sortedTimes[prevTimeIndex];
-                const prevPost = teamPostAtTime[prevTime]?.[team];
-                if (prevPost === postKey) {
-                  isAdjacent = true;
-                }
-              }
-              
-              if (nextTimeIndex < sortedTimes.length) {
-                const nextTime = sortedTimes[nextTimeIndex];
-                const nextPost = teamPostAtTime[nextTime]?.[team];
-                if (nextPost === postKey) {
-                  isAdjacent = true;
-                }
-              }
-              
-              if (!hasBeenHere) {
-                if (isAdjacent) {
-                  wouldBeAdjacent.push(team);
-                } else {
-                  neverBeenHere.push(team);
-                }
-              } else if (hasCompletedRotation) {
-                if (isAdjacent) {
-                  wouldBeAdjacent.push(team);
-                } else {
-                  beenHereButCompletedRotation.push(team);
-                }
-              } else {
-                if (isAdjacent) {
-                  wouldBeAdjacent.push(team);
-                } else {
-                  beenHereButNotAdjacent.push(team);
-                }
-              }
-            });
-            
-            postTeamOptions.push({ 
-              postKey, 
-              neverBeenHere, 
-              beenHereButCompletedRotation,
-              beenHereButNotAdjacent, 
-              wouldBeAdjacent 
-            });
-          });
-
-          postTeamOptions.sort((a, b) => {
-            const aNonAdjacentOptions = a.neverBeenHere.length + a.beenHereButCompletedRotation.length + a.beenHereButNotAdjacent.length;
-            const bNonAdjacentOptions = b.neverBeenHere.length + b.beenHereButCompletedRotation.length + b.beenHereButNotAdjacent.length;
-            
-            if (aNonAdjacentOptions !== bNonAdjacentOptions) {
-              return aNonAdjacentOptions - bNonAdjacentOptions;
-            }
-            
-            return b.neverBeenHere.length - a.neverBeenHere.length;
-          });
-
-          const usedTeams = new Set<string>();
-          
-          postTeamOptions.forEach(({ postKey, neverBeenHere, beenHereButCompletedRotation, beenHereButNotAdjacent, wouldBeAdjacent }) => {
-            let assignedTeam: string | null = null;
-            
-            const availableNeverBeen = neverBeenHere.filter(team => !usedTeams.has(team));
-            if (availableNeverBeen.length > 0) {
-              assignedTeam = availableNeverBeen[0];
-            }
-            
-            if (!assignedTeam) {
-              const availableCompletedRotation = beenHereButCompletedRotation.filter(team => !usedTeams.has(team));
-              if (availableCompletedRotation.length > 0) {
-                assignedTeam = availableCompletedRotation[0];
-              }
-            }
-            
-            if (!assignedTeam) {
-              const availableNotAdjacent = beenHereButNotAdjacent.filter(team => !usedTeams.has(team));
-              if (availableNotAdjacent.length > 0) {
-                assignedTeam = availableNotAdjacent[0];
-              }
-            }
-            
-            if (!assignedTeam) {
-              const availableAdjacent = wouldBeAdjacent.filter(team => !usedTeams.has(team));
-              if (availableAdjacent.length > 0) {
-                assignedTeam = availableAdjacent[0];
-              }
-            }
-            
-            if (assignedTeam) {
-              updatedAssignments[time][postKey] = assignedTeam;
-              usedTeams.add(assignedTeam);
-              teamPostHistory[assignedTeam].add(postKey);
-              teamPostAtTime[time][assignedTeam] = postKey;
-            }
-          });
-        }
+        processAutofillTimePoint(
+          time, timeIndex, sortedTimes, posts, staffTeams,
+          updatedAssignments, teamPostHistory, teamPostAtTime
+        );
       });
     }
 
@@ -414,7 +382,7 @@ export default function PostingScheduleModal({
       }}
     >
       <ModalContent>
-        { (
+        {(
           <>
             <ModalHeader className="flex justify-between items-center">
               <h2 className="text-xl font-bold">Schedule</h2>
@@ -456,9 +424,8 @@ export default function PostingScheduleModal({
                         return (
                           <th
                             key={time}
-                            className={`p-2 text-left whitespace-nowrap ${
-                              isCurrentPeriod ? 'bg-surface-deep' : 'bg-surface-deepest'
-                            }`}
+                            className={`p-2 text-left whitespace-nowrap ${isCurrentPeriod ? 'bg-surface-deep' : 'bg-surface-deepest'
+                              }`}
                             style={{ maxWidth: '180px', minWidth: '120px' }}
                           >
                             {editingTime?.originalTime === time ? (
@@ -477,7 +444,7 @@ export default function PostingScheduleModal({
                                 autoFocus
                                 className="w-full p-1 rounded bg-surface-deep text-surface-light border border-surface-liner outline-none"
                               />
-                              ) : (
+                            ) : (
                               <span
                                 onClick={() =>
                                   setEditingTime({ originalTime: time, newTime: time })
@@ -505,9 +472,8 @@ export default function PostingScheduleModal({
                           return (
                             <td
                               key={time}
-                              className={`p-2 ${
-                                isCurrentPeriod ? 'bg-surface-deep' : ''
-                              }`}
+                              className={`p-2 ${isCurrentPeriod ? 'bg-surface-deep' : ''
+                                }`}
                             >
                               <AssignmentDropdown
                                 value={currentAssignment}
@@ -535,15 +501,14 @@ export default function PostingScheduleModal({
                         <th className="p-2 text-left font-semibold bg-surface-deepest w-1/3">
                           Post
                         </th>
-                          {visibleMobileColumns.map(time => {
+                        {visibleMobileColumns.map(time => {
                           const isCurrentPeriod = time === activeTime;
 
                           return (
                             <th
                               key={time}
-                              className={`p-2 text-left w-1/3 ${
-                                isCurrentPeriod ? 'bg-surface-deep' : 'bg-surface-deepest'
-                              }`}
+                              className={`p-2 text-left w-1/3 ${isCurrentPeriod ? 'bg-surface-deep' : 'bg-surface-deepest'
+                                }`}
                             >
                               {editingTime?.originalTime === time ? (
                                 <input
@@ -589,9 +554,8 @@ export default function PostingScheduleModal({
                             return (
                               <td
                                 key={time}
-                                className={`p-2 w-1/3 align-top relative ${
-                                  isCurrentPeriod ? 'bg-surface-deep' : ''
-                                }`}
+                                className={`p-2 w-1/3 align-top relative ${isCurrentPeriod ? 'bg-surface-deep' : ''
+                                  }`}
                               >
                                 <AssignmentDropdown
                                   value={currentAssignment}
