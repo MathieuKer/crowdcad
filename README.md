@@ -43,15 +43,30 @@ npm run dev
 
 2. The dev server runs at `http://localhost:3000`.
 
-3. For Firebase configuration, follow the instructions in [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md). The runtime initializer is at `src/app/firebase.ts`.
+3. **(Alternative) Run with Docker:**
+   If you have Docker and Docker Compose installed, you can start the application without installing Node.js locally. First, set up your `.env.local` file (see step 4), then run:
+   ```bash
+   npm run docker:dev
+   # or simply: docker compose --env-file .env.local up -d
+   ```
+   The application will be available at `http://localhost:3000`.
+
+4. For Firebase configuration, follow the instructions in [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md). The runtime initializer is at `src/app/firebase.ts`.
 
 Environment example
 
-Copy `.env.example` to `.env.local` and fill your Firebase values before running locally. Do not commit your `.env.local`:
+Copy `.env.example` to `.env.local` and fill your Firebase values. Pour le développement, tu peux utiliser ces variables de configuration Firebase :
 
 ```bash
-cp .env.example .env.local
-# edit .env.local and paste values from your Firebase project settings
+NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyApb8e4ttLGlfWlu6g7e7pJ8e05tJVr-0A
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=crowdcad-math.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=crowdcad-math
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=crowdcad-math.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=1060321130787
+NEXT_PUBLIC_FIREBASE_APP_ID=1:1060321130787:web:f81da994b66d138bf9f496
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-DVBXZ4ZMTF
+
+DISABLE_TELEMETRY=true
 ```
 
 

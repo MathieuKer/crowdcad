@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "docker:dev": "docker compose --env-file .env.local up --build"
   },
   "dependencies": {
     "@heroui/react": "^2.8.5",
