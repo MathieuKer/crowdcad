@@ -4,64 +4,46 @@
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE.md)
 [![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
 
-CrowdCAD is an open-source, browser-based Computer-Aided Dispatch (CAD) system for volunteer EMS and event medical teams. Full developer and operational documentation lives in the `docs/` folder and in policy files. The demo with further information can be found at [crowdcad.org](https://crowdcad.org)
+CrowdCAD is an open-source, browser-based **Computer-Aided Dispatch (CAD)** system specifically designed for volunteer EMS, first responders, and event medical teams. It provides a real-time interface for managing interventions, tracking teams, and coordinating emergency responses.
 
-#### Quick links
+Demo and more information: [crowdcad.org](https://crowdcad.org)
 
-- **User guide:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
-- **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **Component patterns:** [docs/COMPONENTS.md](docs/COMPONENTS.md)
-- **Firebase & setup:** [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md)
-- **Self-hosting:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- **Contributing guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
-- **Code of Conduct:** [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- **Changelog / Releases:** [CHANGELOG.md](CHANGELOG.md)
-- **Security & reporting:** [SECURITY.md](SECURITY.md)
-- **License:** [LICENSE.md](LICENSE.md)
+---
 
-#### Quickstart
+## 🚀 Features
 
-1. Fork then clone (recommended — preserves attribution and lets you receive upstream updates):
+- **Real-time Dispatching**: Manage and track emergency calls as they happen.
+- **Team Management**: Coordinate volunteer teams, equipment, and supervisors.
+- **Interactive Mapping**: Place and track markers for locations, teams, and equipment on venue-specific maps.
+- **Service Monitoring**: Track clinical interventions and walk-ups.
+- **FSD Architecture**: Built with a modular Feature-Sliced Design for better maintainability.
 
-```bash
-# Fork via GitHub first: https://github.com/evanqua/crowdcad
-# Then clone your fork:
-git clone https://github.com/<your-github-username>/crowdcad.git
-cd crowdcad
-npm install
-npm run dev
-```
+## 🛠 Tech Stack
 
-Or clone directly without forking:
+- **Frontend**: [Next.js 15+](https://nextjs.org/) (App Router), [React 19](https://react.dev/), [Tailwind CSS](https://tailwindcss.com/)
+- **UI Components**: [HeroUI](https://heroui.com/), [Lucide React](https://lucide.dev/)
+- **Backend/Database**: [Firebase](https://firebase.google.com/) (Firestore, Auth, Storage)
+- **Deployment**: [Docker](https://www.docker.com/) & [GitHub Actions](https://github.com/features/actions)
 
-```bash
-git clone https://github.com/evanqua/crowdcad.git
-cd crowdcad
-npm install
-npm run dev
-```
+---
 
-2. The dev server runs at `http://localhost:3000`.
+## 📥 Getting Started
 
-3. **(Alternative) Run with Docker:**
-   If you have Docker and Docker Compose installed, you can start the application without installing Node.js locally. First, set up your `.env.local` file (see step 4), then run:
+### 📋 Prerequisites
+
+- **Node.js**: Version 20 or higher
+- **Package Manager**: `npm` (included with Node.js)
+- **Docker**: Optional, but recommended for consistent environments
+
+### ⚙️ Environment Setup
+
+1. Copy the example environment file:
    ```bash
-   npm run docker:dev
-   # or simply: docker compose --env-file .env.local up -d
+   cp .env.example .env.local
    ```
-   The application will be available at `http://localhost:3000`.
+2. Fill in your Firebase configuration variables in `.env.local`. 
 
-4. For Firebase configuration, follow the instructions in [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md). The runtime initializer is at `src/app/firebase.ts`.
-
-#### Default Credentials
-
-Pour se connecter par défaut après avoir lancé le projet, utilisez les identifiants suivants :
-- **Email :** `test@test.test`
-- **Mot de passe :** `Allo1234`
-
-Environment example
-
-Copy `.env.example` to `.env.local` and fill your Firebase values. Pour le développement, tu peux utiliser ces variables de configuration Firebase :
+For development and testing, you can use these pre-configured values:
 
 ```bash
 NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyApb8e4ttLGlfWlu6g7e7pJ8e05tJVr-0A
@@ -75,39 +57,89 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-DVBXZ4ZMTF
 DISABLE_TELEMETRY=true
 ```
 
+### 💻 Local Development
 
-#### When to read the other docs
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Run the development server:
+   ```bash
+   npm run dev
+   ```
+3. Open [http://localhost:3000](http://localhost:3000) with your browser.
 
-- Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before making cross-cutting changes.
-- Read [docs/COMPONENTS.md](docs/COMPONENTS.md) before adding UI components or modals.
-- Follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) for self-hosting and compliance guidance (BAA, rules, backups).
-- See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for operator-facing workflows and screenshots.
+---
 
-#### Reporting and policies
+## 🐳 Docker Setup
 
-- Report security issues per [SECURITY.md](SECURITY.md).
-- Community expectations are in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+CrowdCAD is fully containerized for easy deployment and testing.
 
-#### Contributing
+### 🏗️ Build and Run (Recommended)
 
-Please consult [CONTRIBUTING.md](CONTRIBUTING.md) for workflow and PR guidance. For small changes, open a branch, push and create a PR for review.
+To start the application using Docker Compose (which handles building the image with your environment variables):
 
-#### Community & visibility
+```bash
+npm run docker:dev
+```
 
-CrowdCAD's mission is to make volunteer event medical services safer and more effective. To help the project reach as many organizations as possible:
+This command runs `docker compose --env-file .env.local up --build` under the hood.
 
-- Please fork the repository on GitHub when adopting or modifying CrowdCAD. Forks preserve attribution and make upstream collaboration visible.
-- Star and watch the repo if you use it; forks, stars and PRs are public signals that help discoverability.
-- If you use CrowdCAD for your organization, consider linking back to this repository in your README or site to help others find the project.
+### 🛑 Stop the Container
 
-#### Support / Contact
+```bash
+docker compose down
+```
 
-For questions, security reports, or hosting inquiries, email: support@crowdcad.org
+### 📝 Docker Troubleshooting
+- Ensure `.env.local` is present and filled before building.
+- If you change environment variables, you must rebuild the image using the `--build` flag.
 
-#### Acknowledgements
+---
 
-CrowdCAD is built by volunteers and maintainers listed in the project metadata. See the individual docs for maintainers and contact details.
+## 🔑 Default Credentials
 
-CrowdCAD is an open-source software framework. It does not provide HIPAA compliance out of the box. Organizations hosting CrowdCAD are solely responsible for ensuring their implementation meets applicable legal and regulatory requirements, including HIPAA.
+For initial testing after launching the project, use the following credentials:
 
-CrowdCAD contributors assume no responsibility for how this software is used.
+- **Email:** `test@test.test`
+- **Password:** `Allo1234`
+
+---
+
+## 📂 Project Structure
+
+- `src/app`: Next.js App Router pages and global layouts.
+- `src/features`: Focused business logic (Dispatch, Events, Teams, Venues) using Feature-Sliced Design.
+- `src/components`: Reusable UI components.
+- `src/services`: Shared services layer (Firestore, Auth).
+- `src/hooks`: Custom React hooks for shared logic.
+- `docs/`: Comprehensive technical and operational documentation.
+
+---
+
+## 📖 Further Documentation
+
+- **User Guide:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+- **Architecture Details:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Firebase Setup:** [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md)
+- **Deployment & Compliance:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- **Contributing Guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for our workflow and PR guidance.
+
+## 🛡️ Security
+
+To report security issues, please refer to [SECURITY.md](SECURITY.md).
+
+## ⚖️ License
+
+CrowdCAD is licensed under the [AGPL-3.0 License](LICENSE.md).
+
+---
+
+> [!IMPORTANT]
+> CrowdCAD is an open-source software framework. It does not provide HIPAA compliance out of the box. Organizations hosting CrowdCAD are solely responsible for ensuring their implementation meets applicable legal and regulatory requirements.
