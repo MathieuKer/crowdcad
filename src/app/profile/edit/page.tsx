@@ -3,9 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useauth';
-import { auth, db } from '@/app/firebase';
+import { auth } from '@/app/firebase';
 import { updateProfile } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { userService } from '@/services/user.service';
 import { Card, CardBody, Button, Avatar } from '@heroui/react';
 import LoadingScreen from '@/components/ui/loading-screen';
 
@@ -42,8 +42,7 @@ export default function EditProfilePage() {
         });
 
         // Save phone (and other profile metadata) to Firestore users collection
-        const userRef = doc(db, 'users', auth.currentUser.uid);
-        await setDoc(userRef, { phoneNumber: phone || null }, { merge: true });
+        await userService.upsert(auth.currentUser.uid, { phoneNumber: phone || null });
 
         setMessage('Profile saved.');
         router.push('/profile');

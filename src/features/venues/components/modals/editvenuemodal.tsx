@@ -6,12 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 
 import { getAuth } from 'firebase/auth';
-import { db } from '@/app/firebase';
-import {
-  doc,
-  getDoc,
-  updateDoc,
-} from 'firebase/firestore';
+import { venueService } from '@/features/venues/services/venue.service';
 import {
   getStorage,
   ref,
@@ -30,6 +25,50 @@ interface Props {
 }
 
 type CoordinatePost = { name: string; x: number; y: number };
+
+// Robust upload with retry (Moved outside to reduce nested functions)
+const uploadWithRetry = async (
+  storageRef: StorageReference,
+  file: File,
+  maxRetries = 3,
+  baseDelay = 1200
+): Promise<string> => {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      await uploadBytes(storageRef, file);
+      return await getDownloadURL(storageRef);
+    } catch (err: unknown) {
+      const code =
+        typeof err === 'object' && err !== null && 'code' in err
+          ? (err as { code?: unknown }).code
+          : undefined;
+
+      const isRetryable =
+        code === 'storage/retry-limit-exceeded' ||
+        code === 'storage/unknown' ||
+        code === 'storage/canceled' ||
+        code === 'storage/quota-exceeded' ||
+        code === 'storage/unauthenticated';
+
+      if (attempt < maxRetries - 1 && isRetryable) {
+        const wait = baseDelay * Math.pow(2, attempt);
+        await new Promise((res) => setTimeout(res, wait));
+        continue;
+      }
+      throw new Error('Upload failed');
+    }
+  }
+  throw new Error('Max retries exceeded');
+};
+
+const calculateMarkerCoordinates = (e: MouseEvent, rect: DOMRect) => {
+  const nx = ((e.clientX - rect.left) / rect.width) * 100;
+  const ny = ((e.clientY - rect.top) / rect.height) * 100;
+  return {
+    x: Math.max(0, Math.min(100, nx)),
+    y: Math.max(0, Math.min(100, ny))
+  };
+};
 
 export default function EditVenueModal({ venueId, onClose, onSaved }: Props) {
   // Firebase
@@ -65,6 +104,40 @@ export default function EditVenueModal({ venueId, onClose, onSaved }: Props) {
   const [, setDraggingIdx] = useState<number | null>(null);
   const [hoverId, setHoverId] = useState<number | null>(null);
 
+  // Dragging state ref to avoid nested functions
+  const dragStateRef = useRef<{ idx: number | null; rect: DOMRect | null }>({ idx: null, rect: null });
+
+  const handleGlobalMouseMove = React.useCallback((e: MouseEvent) => {
+    const { idx, rect } = dragStateRef.current;
+    if (idx === null || !rect) return;
+
+    const { x, y } = calculateMarkerCoordinates(e, rect);
+    setVenueData((prev) => {
+      const copy = [...prev.posts];
+      const cur = copy[idx];
+      if (typeof cur === 'string') return prev;
+      copy[idx] = { ...cur, x, y };
+      return { ...prev, posts: copy };
+    });
+  }, []);
+
+  const handleGlobalMouseUp = React.useCallback(() => {
+    if (dragStateRef.current.idx !== null) {
+      dragStateRef.current = { idx: null, rect: null };
+      setDraggingIdx(null);
+    }
+  }, []);
+
+  // Set up global listeners once
+  useEffect(() => {
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [handleGlobalMouseMove, handleGlobalMouseUp]);
+
   // File input ref
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -73,15 +146,13 @@ export default function EditVenueModal({ venueId, onClose, onSaved }: Props) {
     let isMounted = true;
     (async () => {
       try {
-        const refDoc = doc(db, 'venues', venueId);
-        const snap = await getDoc(refDoc);
-        if (!snap.exists()) {
+        const data = await venueService.getById(venueId);
+        if (!data) {
           alert('Venue not found');
           onClose();
           return;
         }
         if (!isMounted) return;
-        const data = snap.data() as Venue;
 
         setVenueData({
           name: data.name ?? '',
@@ -195,7 +266,7 @@ export default function EditVenueModal({ venueId, onClose, onSaved }: Props) {
     });
   };
 
-  // Click on image to add coordinate post (matching CreateVenueModal)
+  // Click on image to add coordinate post
   const handleImageClick: React.MouseEventHandler<HTMLImageElement> = (evt) => {
     const img = imgRef.current;
     if (!img) return;
@@ -216,42 +287,16 @@ export default function EditVenueModal({ venueId, onClose, onSaved }: Props) {
     setVenueData((prev) => ({ ...prev, posts: [...prev.posts, newPost] }));
   };
 
-  const handleMarkerMove = (idx: number, x: number, y: number) => {
-    setVenueData((prev) => {
-      const copy = [...prev.posts];
-      const cur = copy[idx];
-      if (typeof cur === 'string') return prev;
-      copy[idx] = { ...cur, x, y };
-      return { ...prev, posts: copy };
-    });
-  };
-
-  // Drag markers (matching CreateVenueModal)
+  // Drag markers (refactored to avoid nested functions)
   const onMarkerMouseDown = (idx: number, evt: React.MouseEvent) => {
     evt.preventDefault();
     evt.stopPropagation();
-    setDraggingIdx(idx);
+
     const img = imgRef.current;
     if (!img) return;
 
-    const rect = img.getBoundingClientRect();
-
-    const onMove = (e: MouseEvent) => {
-      const nx = ((e.clientX - rect.left) / rect.width) * 100;
-      const ny = ((e.clientY - rect.top) / rect.height) * 100;
-      const x = Math.max(0, Math.min(100, nx));
-      const y = Math.max(0, Math.min(100, ny));
-      handleMarkerMove(idx, x, y);
-    };
-
-    const onUp = () => {
-      setDraggingIdx(null);
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    setDraggingIdx(idx);
+    dragStateRef.current = { idx, rect: img.getBoundingClientRect() };
   };
 
   const handleMouseLeaveMarker = (idx: number) => {
@@ -296,40 +341,6 @@ export default function EditVenueModal({ venueId, onClose, onSaved }: Props) {
       });
   };
 
-  // Robust upload with retry
-  const uploadWithRetry = async (
-    storageRef: StorageReference,
-    file: File,
-    maxRetries = 3,
-    baseDelay = 1200
-  ): Promise<string> => {
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        await uploadBytes(storageRef, file);
-        return await getDownloadURL(storageRef);
-      } catch (err: unknown) {
-        const code =
-          typeof err === 'object' && err !== null && 'code' in err
-            ? (err as { code?: unknown }).code
-            : undefined;
-
-        const isRetryable =
-          code === 'storage/retry-limit-exceeded' ||
-          code === 'storage/unknown' ||
-          code === 'storage/canceled' ||
-          code === 'storage/quota-exceeded' ||
-          code === 'storage/unauthenticated';
-
-        if (attempt < maxRetries - 1 && isRetryable) {
-          const wait = baseDelay * Math.pow(2, attempt);
-          await new Promise((res) => setTimeout(res, wait));
-          continue;
-        }
-        throw new Error('Upload failed');
-      }
-    }
-    throw new Error('Max retries exceeded');
-  };
 
   // Save (update existing venue)
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
@@ -361,7 +372,7 @@ export default function EditVenueModal({ venueId, onClose, onSaved }: Props) {
         ...(userId ? { userId } : {}),
       };
 
-      await updateDoc(doc(db, 'venues', venueId), updates);
+      await venueService.update(venueId, updates);
 
       onSaved?.();
       onClose();

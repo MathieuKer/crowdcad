@@ -99,6 +99,104 @@ function getPostKey(post: string | { name: string; }): string {
   return post.name;
 }
 
+interface TeamOptionsResult {
+  postKey: string;
+  neverBeenHere: string[];
+  beenHereButCompletedRotation: string[];
+  beenHereButNotAdjacent: string[];
+  wouldBeAdjacent: string[];
+}
+
+function categorizeTeamForPost(
+  team: string,
+  postKey: string,
+  timeIndex: number,
+  sortedTimes: string[],
+  postsLength: number,
+  teamPostHistory: { [team: string]: Set<string> },
+  teamPostAtTime: { [time: string]: { [team: string]: string } }
+) {
+  const hasBeenHere = teamPostHistory[team].has(postKey);
+  const hasCompletedRotation = teamPostHistory[team].size >= postsLength;
+
+  let isAdjacent = false;
+  const prevTimeIndex = timeIndex - 1;
+  const nextTimeIndex = timeIndex + 1;
+
+  if (prevTimeIndex >= 0) {
+    const prevTime = sortedTimes[prevTimeIndex];
+    if (teamPostAtTime[prevTime]?.[team] === postKey) isAdjacent = true;
+  }
+
+  if (nextTimeIndex < sortedTimes.length) {
+    const nextTime = sortedTimes[nextTimeIndex];
+    if (teamPostAtTime[nextTime]?.[team] === postKey) isAdjacent = true;
+  }
+
+  return { hasBeenHere, hasCompletedRotation, isAdjacent };
+}
+
+function getOptionsForPosts(
+  unassignedPosts: (string | { name: string })[],
+  availableTeams: string[],
+  timeIndex: number,
+  sortedTimes: string[],
+  postsLength: number,
+  teamPostHistory: { [team: string]: Set<string> },
+  teamPostAtTime: { [time: string]: { [team: string]: string } }
+): TeamOptionsResult[] {
+  return unassignedPosts.map(post => {
+    const postKey = getPostKey(post);
+    const neverBeenHere: string[] = [];
+    const beenHereButCompletedRotation: string[] = [];
+    const beenHereButNotAdjacent: string[] = [];
+    const wouldBeAdjacent: string[] = [];
+
+    availableTeams.forEach(team => {
+      const { hasBeenHere, hasCompletedRotation, isAdjacent } = categorizeTeamForPost(
+        team, postKey, timeIndex, sortedTimes, postsLength, teamPostHistory, teamPostAtTime
+      );
+
+      if (!hasBeenHere) {
+        if (isAdjacent) wouldBeAdjacent.push(team);
+        else neverBeenHere.push(team);
+      } else if (hasCompletedRotation) {
+        if (isAdjacent) wouldBeAdjacent.push(team);
+        else beenHereButCompletedRotation.push(team);
+      } else {
+        if (isAdjacent) wouldBeAdjacent.push(team);
+        else beenHereButNotAdjacent.push(team);
+      }
+    });
+
+    return { postKey, neverBeenHere, beenHereButCompletedRotation, beenHereButNotAdjacent, wouldBeAdjacent };
+  });
+}
+
+function assignTeamsToPosts(
+  time: string,
+  postTeamOptions: TeamOptionsResult[],
+  updatedAssignments: { [time: string]: { [post: string]: string } },
+  teamPostHistory: { [team: string]: Set<string> },
+  teamPostAtTime: { [time: string]: { [team: string]: string } }
+) {
+  const usedTeams = new Set<string>();
+
+  postTeamOptions.forEach(({ postKey, neverBeenHere, beenHereButCompletedRotation, beenHereButNotAdjacent, wouldBeAdjacent }) => {
+    let assignedTeam = neverBeenHere.find(team => !usedTeams.has(team)) || null;
+    if (!assignedTeam) assignedTeam = beenHereButCompletedRotation.find(team => !usedTeams.has(team)) || null;
+    if (!assignedTeam) assignedTeam = beenHereButNotAdjacent.find(team => !usedTeams.has(team)) || null;
+    if (!assignedTeam) assignedTeam = wouldBeAdjacent.find(team => !usedTeams.has(team)) || null;
+
+    if (assignedTeam) {
+      updatedAssignments[time][postKey] = assignedTeam;
+      usedTeams.add(assignedTeam);
+      teamPostHistory[assignedTeam].add(postKey);
+      teamPostAtTime[time][assignedTeam] = postKey;
+    }
+  });
+}
+
 function processAutofillTimePoint(
   time: string,
   timeIndex: number,
@@ -128,78 +226,18 @@ function processAutofillTimePoint(
 
   if (availableTeams.length === 0 || unassignedPosts.length === 0) return;
 
-  const postTeamOptions = unassignedPosts.map(post => {
-    const postKey = getPostKey(post);
-    const neverBeenHere: string[] = [];
-    const beenHereButCompletedRotation: string[] = [];
-    const beenHereButNotAdjacent: string[] = [];
-    const wouldBeAdjacent: string[] = [];
-
-    availableTeams.forEach(team => {
-      const hasBeenHere = teamPostHistory[team].has(postKey);
-      const hasCompletedRotation = teamPostHistory[team].size >= posts.length;
-
-      let isAdjacent = false;
-      const prevTimeIndex = timeIndex - 1;
-      const nextTimeIndex = timeIndex + 1;
-
-      if (prevTimeIndex >= 0) {
-        const prevTime = sortedTimes[prevTimeIndex];
-        const prevPost = teamPostAtTime[prevTime]?.[team];
-        if (prevPost === postKey) isAdjacent = true;
-      }
-
-      if (nextTimeIndex < sortedTimes.length) {
-        const nextTime = sortedTimes[nextTimeIndex];
-        const nextPost = teamPostAtTime[nextTime]?.[team];
-        if (nextPost === postKey) isAdjacent = true;
-      }
-
-      if (!hasBeenHere) {
-        if (isAdjacent) wouldBeAdjacent.push(team);
-        else neverBeenHere.push(team);
-      } else if (hasCompletedRotation) {
-        if (isAdjacent) wouldBeAdjacent.push(team);
-        else beenHereButCompletedRotation.push(team);
-      } else {
-        if (isAdjacent) wouldBeAdjacent.push(team);
-        else beenHereButNotAdjacent.push(team);
-      }
-    });
-
-    return {
-      postKey,
-      neverBeenHere,
-      beenHereButCompletedRotation,
-      beenHereButNotAdjacent,
-      wouldBeAdjacent
-    };
-  });
+  const postTeamOptions = getOptionsForPosts(
+    unassignedPosts, availableTeams, timeIndex, sortedTimes, posts.length, teamPostHistory, teamPostAtTime
+  );
 
   postTeamOptions.sort((a, b) => {
-    const aNonAdjacentOptions = a.neverBeenHere.length + a.beenHereButCompletedRotation.length + a.beenHereButNotAdjacent.length;
-    const bNonAdjacentOptions = b.neverBeenHere.length + b.beenHereButCompletedRotation.length + b.beenHereButNotAdjacent.length;
-    if (aNonAdjacentOptions !== bNonAdjacentOptions) return aNonAdjacentOptions - bNonAdjacentOptions;
+    const aNonAdjacent = a.neverBeenHere.length + a.beenHereButCompletedRotation.length + a.beenHereButNotAdjacent.length;
+    const bNonAdjacent = b.neverBeenHere.length + b.beenHereButCompletedRotation.length + b.beenHereButNotAdjacent.length;
+    if (aNonAdjacent !== bNonAdjacent) return aNonAdjacent - bNonAdjacent;
     return b.neverBeenHere.length - a.neverBeenHere.length;
   });
 
-  const usedTeams = new Set<string>();
-
-  postTeamOptions.forEach(({ postKey, neverBeenHere, beenHereButCompletedRotation, beenHereButNotAdjacent, wouldBeAdjacent }) => {
-    let assignedTeam: string | null = null;
-
-    assignedTeam = neverBeenHere.find(team => !usedTeams.has(team)) || null;
-    if (!assignedTeam) assignedTeam = beenHereButCompletedRotation.find(team => !usedTeams.has(team)) || null;
-    if (!assignedTeam) assignedTeam = beenHereButNotAdjacent.find(team => !usedTeams.has(team)) || null;
-    if (!assignedTeam) assignedTeam = wouldBeAdjacent.find(team => !usedTeams.has(team)) || null;
-
-    if (assignedTeam) {
-      updatedAssignments[time][postKey] = assignedTeam;
-      usedTeams.add(assignedTeam);
-      teamPostHistory[assignedTeam].add(postKey);
-      teamPostAtTime[time][assignedTeam] = postKey;
-    }
-  });
+  assignTeamsToPosts(time, postTeamOptions, updatedAssignments, teamPostHistory, teamPostAtTime);
 }
 
 export default function PostingScheduleModal({

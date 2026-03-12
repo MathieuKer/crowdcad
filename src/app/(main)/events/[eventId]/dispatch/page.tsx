@@ -1,33 +1,38 @@
 'use client';
 import { useEffect, useMemo, useState, useRef, useCallback, ReactNode, RefObject, use } from 'react';
-import PostingScheduleModal from '@/components/modals/event/postingschedulemodal';
-import VenueMapModal from '@/components/modals/event/venuemapmodal';
-import EndEventModal from '@/components/modals/event/endeventmodal';
-import QuickCallModal from "@/components/modals/event/quickcallmodal";
-import ClinicWalkupModal from "@/components/dispatch/clinicwalkupmodal";
-import AddTeamModal from "@/components/modals/event/addteammodal";
-import AddSupervisorModal from "@/components/modals/event/addsupervisormodal";
+import PostingScheduleModal from '@/features/events/components/modals/postingschedulemodal';
+import VenueMapModal from '@/features/events/components/modals/venuemapmodal';
+import EndEventModal from '@/features/events/components/modals/endeventmodal';
+import QuickCallModal from "@/features/events/components/modals/quickcallmodal";
+import ClinicWalkupModal from "@/features/dispatch/components/clinicwalkupmodal";
+import AddTeamModal from "@/features/teams/components/modals/addteammodal";
+import AddSupervisorModal from "@/features/teams/components/modals/addsupervisormodal";
 import React from 'react';
 import { doc, onSnapshot, runTransaction } from 'firebase/firestore';
 import { db } from '@/app/firebase';
-import { PostAssignment, Event, Staff, Supervisor, Call, EquipmentStatus, CallLogEntry, TeamLogEntry, EquipmentItem, EventEquipment, ClinicOutcome } from '@/app/types';
+import { Event as EventData, Staff, Supervisor, Call, EquipmentStatus, CallLogEntry, TeamLogEntry } from '@/app/types';
 import { toast, Slide } from 'react-toastify';
 import { useRouter } from 'next/navigation';
 import isEqual from 'lodash.isequal';
 import { useAuth } from '@/hooks/useauth';
 import { Plus, RotateCw, ArrowDownWideNarrow, Rows2, Rows4 } from "lucide-react";
-import TeamCard from '@/components/dispatch/teamcard';
-import TeamCardCondensed from '@/components/dispatch/teamcard-condensed';
-import { CallTrackingTable } from '@/components/dispatch/calltracking';
-import ClinicTrackingTable from '@/components/dispatch/clinictracking';
-import CallTrackingCard from '@/components/dispatch/calltrackingcard';
-import ClinicTrackingCard from '@/components/dispatch/clinictrackingcard';
+import TeamCard from '@/features/dispatch/components/teamcard';
+import TeamCardCondensed from '@/features/dispatch/components/teamcard-condensed';
+import { CallTrackingTable } from '@/features/dispatch/components/calltracking';
+import ClinicTrackingTable from '@/features/dispatch/components/clinictracking';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import DebugModal from '@/components/modals/debugmodal';
 import { ShieldAlert } from 'lucide-react';
 import { Select, SelectItem, Tabs, Tab, Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Tooltip } from "@heroui/react"
-import EquipmentCard from '@/components/dispatch/equipmentcard';
+import { DispatchEquipmentTab } from '@/features/dispatch/components/DispatchEquipmentTab';
 import LoadingScreen from '@/components/ui/loading-screen';
+
+import { useDispatchSchedule } from '@/features/dispatch/hooks/useDispatchSchedule';
+import { useDispatchCallsAdvanced } from '@/features/dispatch/hooks/useDispatchCallsAdvanced';
+import { useDispatchEquipment } from '@/features/dispatch/hooks/useDispatchEquipment';
+import DispatchCallsTab from '@/features/dispatch/components/DispatchCallsTab';
+import DispatchClinicTab from '@/features/dispatch/components/DispatchClinicTab';
+
 
 interface DispatchPageProps {
   params: Promise<{ eventId: string }>
@@ -90,29 +95,11 @@ function PortalDropdown({
   );
 }
 
-// function StatusTimer({ since }: { since: number })  {
-//   const [elapsed, setElapsed] = React.useState(0);
 
-//   React.useEffect(() => {
-//     setElapsed(Math.floor((Date.now() - since) / 1000));
-//     const interval = setInterval(() => {
-//       setElapsed(Math.floor((Date.now() - since) / 1000));
-//     }, 1000);
-//     return () => clearInterval(interval);
-//   }, [since]);
-
-//   const minutes = Math.floor(elapsed / 60);
-//   const seconds = elapsed % 60;
-//   return (
-//     <span>
-//       {minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
-//     </span>
-//   );
-// }
 
 interface TeamWidgetProps {
   staff: Staff;
-  event: Event;
+  event: EventData;
   callDisplayNumberMap: Map<string, number>;
   teamTimers: { [team: string]: number };
   onStatusChange: (staff: Staff, newStatus: string) => void;
@@ -120,7 +107,7 @@ interface TeamWidgetProps {
   onEditTeam?: (staff: Staff) => void;
   onDeleteTeam?: (team: string) => void;
   onRefreshTeamPost?: (team: string) => void;
-  updateEvent: (updates: Partial<Event>) => Promise<void>;
+  updateEvent: (updates: Partial<EventData>) => Promise<void>;
   cardViewMode?: 'normal' | 'condensed';
 }
 
@@ -156,23 +143,112 @@ const TeamWidget = React.memo(function TeamWidget(props: TeamWidgetProps) {
   );
 });
 
-const AUTO_POST_SYNC = false;
+
+
+const removeUndefined = <T,>(obj: T): T => {
+  if (obj === null || typeof obj !== 'object') return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map((item) => removeUndefined(item)) as unknown as T;
+  }
+
+  const cleaned = {} as Record<string, unknown>;
+  const record = obj as Record<string, unknown>;
+
+  Object.keys(record).forEach((key) => {
+    const val = removeUndefined(record[key]);
+    if (val !== undefined) cleaned[key] = val;
+  });
+
+  return cleaned as unknown as T;
+};
 
 export default function DispatchPage({ params }: DispatchPageProps) {
-  const [event, setEvent] = useState<Event | undefined>(undefined);
-  const [postAssignments, setPostAssignments] = useState<PostAssignment>({});
-  // const handleBulkPostAssignment = (newAssignments: PostAssignment) => {
-  //   setPostAssignments(newAssignments);
-  // };
+  const [event, setEvent] = useState<EventData | undefined>(undefined);
   const { eventId } = use(params);
   const { user, ready } = useAuth();
   const router = useRouter();
   const [openCallId, setOpenCallId] = useState<string | null>(null);
   const [openClinicCallId, setOpenClinicCallId] = useState<string | null>(null);
-  const [, setTeamToAdd] = useState<{ [callId: string]: string }>({});
-  // const [addMenuType, setAddMenuType] = useState<{ [callId: string]: 'main' | 'team' | 'supervisor' | 'equipment' }>({});
+  const [teamStatusMap, setTeamStatusMap] = useState<Record<string, Record<string, string>>>({});
   const [showQuickCallForm, setShowQuickCallForm] = useState(false);
   const quickCallRef = useRef<HTMLFormElement>(null);
+
+  const updateEvent = useCallback(async (
+    updateInput: Partial<EventData> | ((current: EventData) => Partial<EventData>)
+  ) => {
+    if (!eventId) return;
+    try {
+      await runTransaction(db, async (transaction) => {
+        const eventRef = doc(db, "events", eventId as string);
+        const eventDoc = await transaction.get(eventRef);
+        if (!eventDoc.exists()) throw new Error("Event does not exist");
+
+        const currentEvent = eventDoc.data() as EventData;
+
+        let updates: Partial<EventData>;
+        if (typeof updateInput === 'function') {
+          updates = updateInput(currentEvent);
+        } else {
+          updates = updateInput;
+        }
+
+        transaction.update(eventRef, removeUndefined(updates));
+      });
+    } catch (error) {
+      console.error("Update failed:", error);
+      toast.error("Failed to save changes. Please try again.");
+    }
+  }, [eventId]);
+
+  const {
+    postAssignments,
+    getCurrentActiveTime,
+    handlePostAssignment,
+    handleBulkPostAssignment,
+    handleClearAllPostAssignments,
+    handleUpdatePostingTime,
+    refreshAllPostsFromSchedule,
+    refreshTeamFromSchedule,
+  } = useDispatchSchedule({ event, updateEvent });
+
+  const callDisplayNumberMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!event?.calls) return map;
+    [...event.calls]
+      .sort((a, b) => parseInt(a.id) - parseInt(b.id))
+      .forEach((call, index) => map.set(call.id, index + 1));
+    return map;
+  }, [event?.calls]);
+
+  const {
+    getEquipmentItems,
+    handleEquipmentStatusChange,
+    handleEquipmentLocationChange,
+    handleEquipmentMarkReady,
+    handleEquipmentDelete,
+    handleResetEquipmentLocations,
+    handleAddVenueEquipment,
+    getAvailableVenueEquipment
+  } = useDispatchEquipment({ event, updateEvent, callDisplayNumberMap });
+
+  const {
+    selectedDuplicateCallId,
+    setSelectedDuplicateCallId,
+    showDuplicateModal,
+    setShowDuplicateModal,
+    editingCell,
+    setEditingCell,
+    editValue,
+    setEditValue,
+    computeCallStatus,
+    handleAddTeamToCall,
+    handleRemoveTeamFromCall,
+    handleMarkDuplicate,
+    handleResolveDuplicate,
+    handleCellClick,
+    handleCellBlur
+  } = useDispatchCallsAdvanced({ event, updateEvent, callDisplayNumberMap });
   const [showAddTeamModal, setShowAddTeamModal] = useState(false);
   const [showEditTeamModal, setShowEditTeamModal] = useState(false);
   const [quickCall, setQuickCall] = useState({
@@ -200,12 +276,6 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     y: number;
     callId: string;
   } | null>(null);
-  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
-  const [selectedDuplicateCallId, setSelectedDuplicateCallId] = useState<string | null>(null);
-  type EditableCallField = keyof Call | 'ageSex';
-
-  const [editingCell, setEditingCell] = useState<{ callId: string; field: EditableCallField } | null>(null);
-  const [editValue, setEditValue] = useState<string>("");
 
   const [showResolvedClinicCalls, setShowResolvedClinicCalls] = useState(false);
 
@@ -216,184 +286,12 @@ export default function DispatchPage({ params }: DispatchPageProps) {
   const [showDebugModal, setShowDebugModal] = useState(false);
 
   // Configure admin emails here or load from environment / Firestore for your deployment.
+  // eslint-disable-next-line sonarjs/no-empty-collection
   const ADMIN_EMAILS: string[] = [];
   const isAdmin = user?.email && ADMIN_EMAILS.includes(user.email);
 
-  const isTimeSlotActive = (timeSlot: string, allTimes: string[]) => {
-    const now = new Date();
-    const currentHHMM = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-    const sortedTimes = [...allTimes].sort();
-    const index = sortedTimes.indexOf(timeSlot);
-    if (index === -1) return false;
 
-    const nextTime = sortedTimes[index + 1];
-    return currentHHMM >= timeSlot && (!nextTime || currentHHMM < nextTime);
-  };
 
-  const updateEvent = useCallback(async (
-    updateInput: Partial<Event> | ((current: Event) => Partial<Event>)
-  ) => {
-    if (!eventId) return;
-    try {
-      await runTransaction(db, async (transaction) => {
-        const eventRef = doc(db, "events", eventId);
-        const eventDoc = await transaction.get(eventRef);
-        if (!eventDoc.exists()) throw new Error("Event does not exist");
-
-        const currentEvent = eventDoc.data() as Event;
-
-        let updates: Partial<Event>;
-        if (typeof updateInput === 'function') {
-          updates = updateInput(currentEvent);
-        } else {
-          updates = updateInput;
-        }
-
-        const removeUndefined = <T,>(obj: T): T => {
-          if (obj === null || typeof obj !== 'object') return obj;
-
-          if (Array.isArray(obj)) {
-            return obj.map((item) => removeUndefined(item)) as unknown as T;
-          }
-
-          const cleaned = {} as Record<string, unknown>;
-          const record = obj as Record<string, unknown>;
-
-          Object.keys(record).forEach((key) => {
-            const val = removeUndefined(record[key]);
-            if (val !== undefined) cleaned[key] = val;
-          });
-
-          return cleaned as unknown as T;
-        };
-
-        transaction.update(eventRef, removeUndefined(updates));
-      });
-    } catch (error) {
-      console.error("Update failed:", error);
-      toast.error("Failed to save changes. Please try again.");
-    }
-  }, [eventId]);
-
-  const handlePostAssignment = useCallback(async (time: string, post: string, team: string) => {
-    await updateEvent((currentEvent) => {
-      const assignments = { ...(currentEvent.postAssignments || {}) };
-      if (!assignments[time]) assignments[time] = {};
-
-      Object.keys(assignments[time]).forEach(p => {
-        if (assignments[time][p] === team) {
-          delete assignments[time][p];
-        }
-      });
-
-      if (team) {
-        assignments[time][post] = team;
-      } else {
-        delete assignments[time][post];
-      }
-
-      let updatedStaff = currentEvent.staff;
-      const isActive = isTimeSlotActive(time, currentEvent.postingTimes || []);
-
-      if (isActive && updatedStaff) {
-        updatedStaff = updatedStaff.map(s => {
-          if (s.team !== team) return s;
-
-          const newHomeBase = post || 'Roaming';
-          const shouldMoveLocation = s.status === 'Available';
-
-          return {
-            ...s,
-            originalPost: newHomeBase,
-            location: shouldMoveLocation ? newHomeBase : s.location
-          };
-        });
-      }
-
-      return {
-        postAssignments: assignments,
-        staff: updatedStaff
-      };
-    });
-  }, [updateEvent]);
-
-  const handleBulkPostAssignment = useCallback(async (newAssignments: PostAssignment) => {
-    await updateEvent((currentEvent) => {
-      const finalAssignments = { ...(currentEvent.postAssignments || {}), ...newAssignments };
-
-      let updatedStaff = currentEvent.staff || [];
-      const times = currentEvent.postingTimes || [];
-
-      const activeTimeSlot = times.find(t => isTimeSlotActive(t, times));
-
-      if (activeTimeSlot && newAssignments[activeTimeSlot]) {
-        const activeAssignments = finalAssignments[activeTimeSlot];
-
-        updatedStaff = updatedStaff.map(s => {
-          const assignedPost = Object.keys(activeAssignments).find(
-            key => activeAssignments[key] === s.team
-          );
-
-          const newHomeBase = assignedPost || 'Roaming';
-          const shouldMoveLocation = s.status === 'Available';
-          if (s.originalPost === newHomeBase) return s;
-
-          return {
-            ...s,
-            originalPost: newHomeBase,
-            location: shouldMoveLocation ? newHomeBase : s.location
-          };
-        });
-      }
-
-      return {
-        postAssignments: finalAssignments,
-        staff: updatedStaff
-      };
-    });
-  }, [updateEvent]);
-
-  const handleClearAllPostAssignments = useCallback(async () => {
-    if (!confirm('Are you sure you want to clear all assignments?')) return;
-
-    await updateEvent((currentEvent) => {
-      const emptyAssignments: PostAssignment = {};
-
-      const updatedStaff = (currentEvent.staff || []).map(s => ({
-        ...s,
-        originalPost: 'Roaming',
-        location: s.status === 'Available' ? 'Roaming' : s.location
-      }));
-
-      return {
-        postAssignments: emptyAssignments,
-        staff: updatedStaff
-      };
-    });
-  }, [updateEvent]);
-
-  const handleUpdatePostingTime = useCallback(async (originalTime: string, newTime: string) => {
-    if (originalTime === newTime) return;
-
-    await updateEvent((currentEvent) => {
-      const times = currentEvent.postingTimes || [];
-      if (times.includes(newTime)) {
-        throw new Error("Time slot already exists");
-      }
-      const newTimes = times.map(t => t === originalTime ? newTime : t);
-
-      const assignments = { ...(currentEvent.postAssignments || {}) };
-      if (assignments[originalTime]) {
-        assignments[newTime] = assignments[originalTime];
-        delete assignments[originalTime];
-      }
-
-      return {
-        postingTimes: newTimes,
-        postAssignments: assignments
-      };
-    });
-  }, [updateEvent]);
 
   // --- Admin Action Handlers ---
 
@@ -406,7 +304,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
       { team: 'Charlie', members: ['Test User [RN]'], status: 'Available', location: 'Roaming', log: [{ timestamp: now, message: 'Test data populated' }], originalPost: 'Roaming' }
     ];
 
-    const currentTeamNames = new Set((event.staff || []).map(s => s.team));
+    const currentTeamNames = new Set((event.staff || []).map((s: Staff) => s.team));
     const teamsToAdd = testTeams.filter(t => !currentTeamNames.has(t.team));
 
     if (teamsToAdd.length === 0) {
@@ -423,7 +321,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     const now = Date.now();
     const hhmm = new Date().getHours().toString().padStart(2, '0') + new Date().getMinutes().toString().padStart(2, '0');
 
-    const updatedStaff = (event.staff || []).map(s => ({
+    const updatedStaff = (event.staff || []).map((s: Staff) => ({
       ...s,
       status: 'Available',
       location: 'Roaming',
@@ -439,7 +337,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     if (!window.confirm("WARNING: This will delete ALL calls and reset ALL logs. Staff will be kept but history wiped. Continue?")) return;
 
     const now = Date.now();
-    const updatedStaff = (event.staff || []).map(s => ({
+    const updatedStaff = (event.staff || []).map((s: Staff) => ({
       ...s,
       log: [{ timestamp: now, message: 'System logs cleared by Admin' }],
       status: 'Available',
@@ -624,8 +522,13 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     const now = new Date();
     const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
 
-    const updatedSupervisor = (event.supervisor || []).map(s => {
+    const updatedSupervisor = (event.supervisor || []).map((s: Supervisor) => {
       if (s.team !== editSupervisorOriginalName) return s;
+      let msg = `${hhmm} - supervisor edited`;
+      if (editSupervisorOriginalName !== newCallSign) {
+        msg += ` (renamed from ${editSupervisorOriginalName})`;
+      }
+
       return {
         ...s,
         team: newCallSign,
@@ -634,8 +537,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
           ...(s.log || []),
           {
             timestamp: now.getTime(),
-            message: `${hhmm} - supervisor edited${editSupervisorOriginalName !== newCallSign ? ` (renamed from ${editSupervisorOriginalName})` : ''
-              }`,
+            message: msg,
           },
         ],
       };
@@ -740,20 +642,24 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     const now = new Date();
     const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
 
-    const updatedStaff = (event.staff || []).map(s => {
+    const updatedStaff = (event.staff || []).map((s: Staff) => {
       if (s.team !== oldName) return s;
+      let msg = `${hhmm} - team edited`;
+      if (oldName !== newName) {
+        msg += ` (renamed from ${oldName})`;
+      }
       return {
         ...s,
         team: newName,
         members: membersStrings,
         log: [
           ...(s.log || []),
-          { timestamp: now.getTime(), message: `${hhmm} - team edited${oldName !== newName ? ` (renamed from ${oldName})` : ''}` }
+          { timestamp: now.getTime(), message: msg }
         ]
       };
     });
 
-    const updatedCalls = oldName !== newName ? (event.calls || []).map(c => {
+    const updatedCalls = oldName !== newName ? (event.calls || []).map((c: Call) => {
       let assignedTeam = c.assignedTeam || [];
       let detachedTeams = c.detachedTeams || [];
 
@@ -788,12 +694,12 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     const now = new Date();
     const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
 
-    const remainingStaff = (event.staff || []).filter(s => s.team !== teamNameToDelete);
+    const remainingStaff = (event.staff || []).filter((s: Staff) => s.team !== teamNameToDelete);
 
-    const updatedCalls = (event.calls || []).map(c => {
+    const updatedCalls = (event.calls || []).map((c: Call) => {
       if (!c.assignedTeam?.includes(teamNameToDelete)) return c;
 
-      const newAssigned = (c.assignedTeam || []).filter(t => t !== teamNameToDelete);
+      const newAssigned = (c.assignedTeam || []).filter((t: string) => t !== teamNameToDelete);
       const newStatus =
         newAssigned.length === 0
           ? 'Pending'
@@ -818,7 +724,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     });
   }, [event, updateEvent]);
 
-  const [teamStatusMap, setTeamStatusMap] = useState<{ [callId: string]: { [team: string]: string } }>({});
+
 
   const getCallRowClass = (call: Call) => {
     if (!Array.isArray(call.assignedTeam)) return 'bg-surface-deep';
@@ -826,8 +732,8 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     if (!event) return 'bg-surface-deep';
 
     const statuses = call.assignedTeam
-      .map(t => event?.staff.find(s => s.team === t)?.status)
-      .filter((status): status is string => status !== undefined);
+      .map((t: string) => event?.staff.find((s: Staff) => s.team === t)?.status)
+      .filter((status: string | undefined): status is string => status !== undefined);
 
     if (statuses.some(status => ['En Route', 'On Scene', 'Transporting'].includes(status))) {
       return 'bg-status-red/10';
@@ -837,96 +743,8 @@ export default function DispatchPage({ params }: DispatchPageProps) {
   };
 
 
-  const ACTIVE_CALL_SET = new Set(['Assigned', 'En Route', 'On Scene', 'Transporting', 'Pending']);
-
-  const commitEquipmentLocation = async (resourceName: string, newLocationRaw: string) => {
-    if (!event) return;
-    const newLocation = newLocationRaw; // allow empty
-
-    let touched = false;
-    const updatedEquipment = (event.eventEquipment || []).map(eq => {
-      if (eq.name === resourceName) {
-        touched = true;
-        const inUse = !!eq.assignedTeam;
-        return {
-          ...eq,
-          location: newLocation,
-          status: inUse ? eq.status : ('Available' as EquipmentStatus),
-        };
-      }
-      return eq;
-    });
-
-    if (!touched) {
-      updatedEquipment.push({
-        id: `eq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        name: resourceName,
-        status: ('Available' as EquipmentStatus),
-        location: newLocation,
-        assignedTeam: null,
-      });
-    }
-
-    await updateEvent({ eventEquipment: updatedEquipment });
-  };
 
 
-
-  const [equipmentDraft, setEquipmentDraft] = useState<Record<string, string>>({});
-
-  type EquipRow = {
-    name: string;
-    inUse: boolean;
-    rightText: string;   // shown in the UI
-    location: string;    // raw location value (can be '')
-  };
-
-
-  function getEquipmentRows(): EquipRow[] {
-    const venueEquipment = (event?.venue as { equipment?: (string | { name: string })[] })?.equipment ?? [];
-    const tracked = event?.eventEquipment ?? [];
-
-    const byName: Record<string, { name: string; assignedTeam?: string | null; location?: string | null; }> = {};
-
-    for (const v of venueEquipment) {
-      const name = typeof v === 'string' ? v : v?.name;
-      if (name) byName[name] = { name, assignedTeam: null, location: null };
-    }
-    for (const t of tracked) {
-      byName[t.name] = { name: t.name, assignedTeam: t.assignedTeam ?? null, location: t.location ?? null };
-    }
-
-    const rows = Object.values(byName).map(r => {
-      const inUse = !!(r.assignedTeam && r.assignedTeam.trim());
-      const location = r.location ?? ''; // raw value for editing (may be empty)
-      let rightText: string;
-
-      if (inUse) {
-        // compute "CallNum - Team(s)" (leave as you already had)
-        const call = (event?.calls ?? []).find(c =>
-          c.assignedTeam?.includes(r.assignedTeam!) && ACTIVE_CALL_SET.has(c.status)
-        );
-        if (call) {
-          const callNo = callDisplayNumberMap.get(call.id);
-          const teams = (call.assignedTeam ?? []).join(', ');
-          rightText = `${callNo} - ${teams}`;
-        } else {
-          rightText = `— - ${r.assignedTeam ?? ''}`;
-        }
-      } else {
-        rightText = location || 'Clinic';
-      }
-
-      return { name: r.name, inUse, location, rightText };
-    });
-
-    rows.sort((a, b) => {
-      if (a.inUse !== b.inUse) return a.inUse ? 1 : -1;
-      return a.name.localeCompare(b.name, undefined, { numeric: true });
-    });
-
-    return rows;
-  }
 
 
   async function handleAgeSexBlur(callId: string) {
@@ -995,8 +813,53 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     return { age, gender };
   };
 
+  const handleStatusChange = useCallback(async (staff: Staff, newStatus: string) => {
+    const updatedStaff = event?.staff?.map(s =>
+      s.team === staff.team
+        ? {
+          ...s,
+          status: newStatus,
+          log: [
+            ...(s.log || []),
+            {
+              timestamp: Date.now(),
+              message: `${new Date().getHours().toString().padStart(2, '0')}${new Date().getMinutes().toString().padStart(2, '0')} - status changed to ${newStatus}`
+            }
+          ]
+        }
+        : s
+    );
+    await updateEvent({
+      staff: updatedStaff,
+      postAssignments
+    });
+  }, [event, updateEvent, postAssignments]);
+
+  const handleLocationChange = useCallback(async (staff: Staff, newLocation: string) => {
+    const updatedStaff = event?.staff?.map(s =>
+      s.team === staff.team
+        ? {
+          ...s,
+          location: newLocation,
+          status: newLocation === 'Clinic' && s.status === 'Available' ? 'In Clinic' : s.status,
+          log: [
+            ...(s.log || []),
+            {
+              timestamp: Date.now(),
+              message: `${new Date().getHours().toString().padStart(2, '0')}${new Date().getMinutes().toString().padStart(2, '0')} - Post changed to ${newLocation}`
+            }
+          ]
+        }
+        : s
+    );
+    await updateEvent({
+      staff: updatedStaff,
+      postAssignments
+    });
+  }, [event, updateEvent, postAssignments]);
+
   const handleSupervisorStatusChange = useCallback((supervisor: Staff, newStatus: string) => {
-    const updatedSupervisors = event?.supervisor.map(s =>
+    const updatedSupervisors = (event?.supervisor || []).map(s =>
       s.team === supervisor.team
         ? {
           ...s,
@@ -1011,7 +874,6 @@ export default function DispatchPage({ params }: DispatchPageProps) {
         }
         : s
     );
-    // updateEvent({ supervisor: updatedSupervisors });
     updateEvent({
       supervisor: updatedSupervisors,
       postAssignments
@@ -1035,229 +897,117 @@ export default function DispatchPage({ params }: DispatchPageProps) {
         }
         : s
     );
-    // await updateEvent({ supervisor: updatedSupervisors });
     await updateEvent({
       supervisor: updatedSupervisors,
       postAssignments
     });
   }, [event, updateEvent, postAssignments]);
 
-  // Helper to convert equipment data to EquipmentItem format
-  const getEquipmentItems = (): EquipmentItem[] => {
-    if (!event) return [];
-    const items: EquipmentItem[] = [];
 
-    // If eventEquipment exists and has items, use ONLY that (deleted items won't be in the array)
-    // Otherwise fall back to venue equipment
-    const equipmentSource = (event.eventEquipment && event.eventEquipment.length > 0)
-      ? event.eventEquipment
-      : (event?.venue?.equipment || []);
 
-    equipmentSource.forEach(eq => {
-      const eqName = typeof eq === 'string' ? eq : eq.name;
-      const eventEq = event.eventEquipment?.find(e => e.name === eqName);
-
-      // Get staging location - prefer eventEquipment's defaultLocation, fallback to equipment location from venue
-      const stagingLocation = eventEq?.defaultLocation ||
-        (typeof eq !== 'string' && eq.location) ||
-        'Staging';
-
-      // Check if equipment is on any active call
-      const activeCall = event.calls?.find(c =>
-        c.equipment?.includes(eqName) &&
-        !['Resolved', 'Delivered', 'Refusal', 'NMM'].includes(c.status)
-      );
-
-      // Determine delivery team
-      const deliveryTeam = activeCall?.equipmentTeams?.[0];
-
-      // Determine current location - prefer eventEquipment location if set
-      let currentLocation = eventEq?.location;
-
-      // If on call and delivered eq, location is the assigned team
-      if (activeCall && activeCall.status === 'Delivered Eq') {
-        currentLocation = activeCall.assignedTeam[0];
-      }
-
-      // Check if equipment is in clinic
-      const inClinic = currentLocation === 'In Clinic' || eventEq?.status === 'In Clinic';
-
-      // Determine status
-      let status: string;
-      if (activeCall) {
-        // Get the call display number for this call
-        const callNum = callDisplayNumberMap.get(activeCall.id) || activeCall.order;
-        status = `Call ${callNum}`;
-      } else if (inClinic) {
-        status = 'In Clinic';
-      } else {
-        status = eventEq?.status || 'Available';
-      }
-
-      items.push({
-        name: eqName,
-        stagingLocation: stagingLocation,
-        currentLocation: currentLocation || stagingLocation,
-        status: status,
-        callId: activeCall?.id,
-        deliveryTeam: deliveryTeam,
-        needsRefresh: inClinic && !activeCall, // Only needs refresh if in clinic but not on active call
-        notes: eventEq?.notes,
-      });
-    });
-
-    return items;
-  };
-
-  const handleEquipmentStatusChange = useCallback(async (equipmentName: string, newStatus: string) => {
+  const handleTogglePriorityFromMenu = useCallback(async (callId: string) => {
     if (!event) return;
-
-    try {
-      const existing = (event.eventEquipment || []).find(eq => eq.name === equipmentName);
-
-      let updatedEventEquipment: EventEquipment[] = event.eventEquipment ? [...event.eventEquipment] : [];
-
-      if (existing) {
-        updatedEventEquipment = updatedEventEquipment.map(eq =>
-          eq.name === equipmentName ? { ...eq, status: newStatus as EquipmentStatus } : eq
-        );
-      } else {
-        // Not currently tracked in event.eventEquipment — add it so changes persist
-        // Try to derive a staging/location from venue definition if available
-        const venueEq = (event.venue?.equipment || []).find(v => (typeof v === 'string' ? v : v.name) === equipmentName);
-        const derivedLocation = typeof venueEq === 'string' ? '' : (venueEq && (venueEq as { location?: string }).location) || '';
-        const newItem: EventEquipment = {
-          id: `eq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          name: equipmentName,
-          status: newStatus as EquipmentStatus,
-          location: derivedLocation,
-          assignedTeam: null,
-        } as EventEquipment;
-        updatedEventEquipment.push(newItem);
-      }
-
-      // Optimistically update local state so the UI reflects the change immediately
-      setEvent(prev => prev ? { ...prev, eventEquipment: updatedEventEquipment } : prev);
-
-      await updateEvent({ eventEquipment: updatedEventEquipment });
-    } catch (error) {
-      console.error('Error updating equipment status:', error);
-      toast.error('Failed to update equipment status');
-    }
-  }, [event, updateEvent, setEvent]);
-
-  const handleEquipmentLocationChange = (equipmentName: string, newLocation: string) => {
-    if (!event) return;
-    const existing = event.eventEquipment?.find(e => e.name === equipmentName);
-    const updatedEquipment = existing
-      ? (event.eventEquipment || []).map(e => e.name === equipmentName ? { ...e, location: newLocation } : e)
-      : [...(event.eventEquipment || []), {
-        id: `eq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        name: equipmentName,
-        status: 'Available' as EquipmentStatus,
-        location: newLocation,
-        assignedTeam: null,
-      }];
-    updateEvent({ eventEquipment: updatedEquipment });
-  };
-
-  const handleEquipmentMarkReady = (equipmentName: string) => {
-    // Mark equipment as ready: reset to staging location
-    if (!event) return;
-    const eqItem = event.venue?.equipment?.find(e => (typeof e === 'string' ? e : e.name) === equipmentName);
-    const stagingLocation = typeof eqItem === 'string' ? '' : eqItem?.location || 'Not Set';
-    const updatedEquipment = (event.eventEquipment || []).map(e =>
-      e.name === equipmentName ? { ...e, location: stagingLocation } : e
-    );
-    updateEvent({ eventEquipment: updatedEquipment });
-  };
-
-  const handleEquipmentDelete = useCallback(async (equipmentName: string) => {
-    if (!event) return;
-
-    const confirmDelete = window.confirm(`Delete equipment "${equipmentName}" from this event?`);
-    if (!confirmDelete) return;
-
-    try {
-      // Remove from eventEquipment array (event-specific equipment)
-      const updatedEventEquipment = (event.eventEquipment || []).filter(
-        eq => eq.name !== equipmentName
-      );
-
-      await updateEvent({
-        eventEquipment: updatedEventEquipment
-      });
-
-      toast.success(`Deleted equipment: ${equipmentName}`);
-    } catch (error) {
-      console.error('Error deleting equipment:', error);
-      toast.error('Failed to delete equipment');
-    }
-  }, [event, updateEvent]);
-
-  const handleResetEquipmentLocations = useCallback(async () => {
-    if (!event) return;
-
-    const updatedEventEquipment = (event.eventEquipment || []).map(eq => {
-      // Get the default/staging location from venue equipment definition
-      const venueEq = (event.venue?.equipment || []).find(v =>
-        (typeof v === 'string' ? v : v.name) === eq.name
-      );
-      const defaultLocation = typeof venueEq === 'string' ? 'Staging' : (venueEq?.location || 'Staging');
-
-      return {
-        ...eq,
-        location: eq.defaultLocation || defaultLocation,
-        status: 'Available' as EquipmentStatus
-      };
-    });
-
-    await updateEvent({ eventEquipment: updatedEventEquipment });
-    toast.success('Equipment locations reset to defaults');
-  }, [event, updateEvent]);
-
-  const handleAddVenueEquipment = useCallback(async (equipmentName: string) => {
-    if (!event) return;
-
-    // Find the venue equipment definition
-    const venueEq = (event.venue?.equipment || []).find(v =>
-      (typeof v === 'string' ? v : v.name) === equipmentName
-    );
-
-    if (!venueEq) return;
-
-    const name = typeof venueEq === 'string' ? venueEq : venueEq.name;
-    const defaultLocation = typeof venueEq === 'string' ? 'Staging' : (venueEq.location || 'Staging');
-
-    const newEquipment: EventEquipment = {
-      id: `eq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      name: name,
-      status: 'Available' as EquipmentStatus,
-      location: defaultLocation,
-      defaultLocation: defaultLocation,
-      assignedTeam: null,
+    const callToUpdate = event.calls.find(c => c.id === callId);
+    if (!callToUpdate) return;
+    const newPriority = !callToUpdate.priority;
+    const now = new Date();
+    const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
+    const updatedCall = {
+      ...callToUpdate,
+      priority: newPriority,
+      log: [...(callToUpdate.log || []), { timestamp: now.getTime(), message: `${hhmm} - Priority marked as ${newPriority ? 'High' : 'Normal'}.` }]
     };
-
-    await updateEvent({
-      eventEquipment: [...(event.eventEquipment || []), newEquipment]
-    });
-
-    toast.success(`Added equipment: ${name}`);
+    const updatedCalls = event.calls.map(c => c.id === callId ? updatedCall : c);
+    await updateEvent({ calls: updatedCalls });
   }, [event, updateEvent]);
 
-  // Get venue equipment that's not yet on the dispatch page
-  const getAvailableVenueEquipment = useCallback(() => {
-    if (!event?.venue?.equipment) return [];
+  const getUpdatedCallForStatusChange = (
+    c: Call,
+    targetCallId: string,
+    team: string,
+    newStatus: string,
+    isEqDetaching: boolean,
+    logMessage: string,
+    eventData: EventData | null | undefined,
+    statusMap: Record<string, Record<string, string>>
+  ): Call => {
+    if (c.id !== targetCallId) return c;
 
-    const currentEquipmentNames = new Set(
-      (event.eventEquipment || []).map(eq => eq.name)
-    );
+    const isDetaching = ['Delivered', 'Refusal', 'Unable to Locate', 'NMM', 'Detached', 'Delivering', 'Rolled from Scene'].includes(newStatus);
+    const updatedLog = [...(c.log || []), { timestamp: Date.now(), message: logMessage }];
 
-    return (event.venue.equipment || [])
-      .map(eq => typeof eq === 'string' ? eq : eq.name)
-      .filter(name => !currentEquipmentNames.has(name));
-  }, [event]);
+    let updatedAssignedTeam = c.assignedTeam || [];
+    let updatedEquipmentTeams = c.equipmentTeams || [];
+    const updatedDetachedTeams = [...(c.detachedTeams || [])];
 
+    let newCallStatus = c.status;
+
+    if (isEqDetaching) {
+      updatedAssignedTeam = updatedAssignedTeam.filter(t => t !== team);
+      updatedEquipmentTeams = updatedEquipmentTeams.filter(t => t !== team);
+
+      if (!updatedDetachedTeams.some(t => t.team === team)) {
+        updatedDetachedTeams.push({
+          team,
+          reason: newStatus === 'Delivered Eq' ? 'Delivered Eq' : 'Detached'
+        });
+      }
+    } else if (isDetaching) {
+      updatedAssignedTeam = updatedAssignedTeam.filter(t => t !== team);
+      updatedEquipmentTeams = updatedEquipmentTeams.filter(t => t !== team);
+
+      if (!updatedDetachedTeams.some(t => t.team === team)) {
+        updatedDetachedTeams.push({ team, reason: newStatus });
+      }
+
+      if (['Delivered', 'Refusal', 'NMM'].includes(newStatus)) {
+        const supervisorsOnCall = eventData?.supervisor?.filter(s =>
+          c.assignedTeam?.includes(s.team)
+        ) || [];
+
+        supervisorsOnCall.forEach(supervisor => {
+          if (!updatedDetachedTeams.some(t => t.team === supervisor.team)) {
+            updatedDetachedTeams.push({ team: supervisor.team, reason: 'Auto-detached' });
+          }
+        });
+
+        updatedAssignedTeam = updatedAssignedTeam.filter(teamName =>
+          !eventData?.supervisor?.some(s => s.team === teamName)
+        );
+      }
+
+      if (updatedAssignedTeam.length === 0) {
+        if (['Delivered', 'NMM', 'Unable to Locate', 'Refusal'].includes(newStatus)) {
+          newCallStatus = newStatus;
+        } else {
+          newCallStatus = 'Resolved';
+        }
+      } else {
+        const remainingStatuses = Object.entries(statusMap[targetCallId] || {})
+          .filter(([teamName]) => updatedAssignedTeam.includes(teamName))
+          .map(([, status]) => status as string);
+
+        if (remainingStatuses.includes('Transporting')) newCallStatus = 'Transporting';
+        else if (remainingStatuses.includes('On Scene')) newCallStatus = 'On Scene';
+        else if (remainingStatuses.includes('En Route')) newCallStatus = 'En Route';
+      }
+    } else if (['On Scene', 'Transporting'].includes(newStatus)) {
+      newCallStatus = newStatus;
+    }
+
+    const clinicFlag = (newStatus === 'Delivered' || newCallStatus === 'Delivered') ? true : (c.clinic ?? false);
+    const displayStatus = newCallStatus === 'Resolved' && newStatus === 'Ambulance' ? 'Rolled' : newCallStatus;
+
+    return {
+      ...c,
+      status: displayStatus,
+      clinic: clinicFlag,
+      log: updatedLog,
+      assignedTeam: updatedAssignedTeam,
+      equipmentTeams: updatedEquipmentTeams,
+      detachedTeams: updatedDetachedTeams
+    };
+  };
 
   const handleTeamStatusChange = (callId: string, team: string, newStatus: string) => {
     console.log("FUNCTION CALLED", { callId, team, newStatus });
@@ -1286,116 +1036,13 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     const logMessage = `${hhmm} - ${team} set to ${newStatus}`;
 
     // DECLARE newCallStatus here with proper initialization
-    let newCallStatus = latestCall.status; // Initialize with current status
+    const newCallStatus = latestCall.status; // Initialize with current status
 
     const isEqDetaching = ['Delivered Eq'].includes(newStatus);
 
-    const updatedCalls = (event?.calls || []).map(c => {
-      console.log('call updated');
-      if (c.id !== callId) return c;
-
-      const isDetaching = ['Delivered', 'Refusal', 'Unable to Locate', 'NMM', 'Detached', 'Delivering', 'Rolled from Scene'].includes(newStatus);
-
-      const updatedLog = [...(c.log || []), { timestamp: Date.now(), message: logMessage }];
-
-      let updatedAssignedTeam = c.assignedTeam || [];
-      let updatedEquipmentTeams = c.equipmentTeams || [];
-      const updatedDetachedTeams = [...(c.detachedTeams || [])];
-
-      // Handle equipment team detachment
-      if (isEqDetaching) {
-        updatedAssignedTeam = updatedAssignedTeam.filter(t => t !== team);
-        updatedEquipmentTeams = updatedEquipmentTeams.filter(t => t !== team);
-
-        // Record detachment
-        if (!updatedDetachedTeams.some(t => t.team === team)) {
-          updatedDetachedTeams.push({
-            team,
-            reason: newStatus === 'Delivered Eq' ? 'Delivered Eq' : 'Detached'
-          });
-        }
-      } else if (isDetaching) {
-        // Original detachment logic for regular teams
-        // remove team from assigned list
-        updatedAssignedTeam = updatedAssignedTeam.filter(t => t !== team);
-        // Also remove from equipment teams if present
-        updatedEquipmentTeams = updatedEquipmentTeams.filter(t => t !== team);
-
-        // record one-time detachment
-        if (!updatedDetachedTeams.some(t => t.team === team)) {
-          updatedDetachedTeams.push({ team, reason: newStatus });
-        }
-
-        // Auto-detach supervisors when any team is detached with resolving status
-        if (['Delivered', 'Refusal', 'NMM'].includes(newStatus)) {
-          const supervisorsOnCall = event?.supervisor?.filter(s =>
-            c.assignedTeam?.includes(s.team)
-          ) || [];
-
-          supervisorsOnCall.forEach(supervisor => {
-            if (!updatedDetachedTeams.some(t => t.team === supervisor.team)) {
-              updatedDetachedTeams.push({ team: supervisor.team, reason: 'Auto-detached' });
-            }
-          });
-
-          // Remove supervisors from assigned teams
-          updatedAssignedTeam = updatedAssignedTeam.filter(teamName =>
-            !event?.supervisor?.some(s => s.team === teamName)
-          );
-        }
-
-        if (updatedAssignedTeam.length === 0) {
-          if (newStatus === 'Delivered') {
-            newCallStatus = 'Delivered';
-          } else if (newStatus === 'NMM') {
-            newCallStatus = 'NMM';
-          } else if (newStatus === 'Unable to Locate') {
-            newCallStatus = 'Unable to Locate';
-          } else if (newStatus === 'Refusal') {
-            newCallStatus = 'Refusal';
-          } else if (newStatus === 'Ambulance') {
-            newCallStatus = 'Resolved';
-          } else {
-            newCallStatus = 'Resolved';
-          }
-        } else {
-          // compute composite status from remaining assigned teams
-          const remainingStatuses = Object.entries(teamStatusMap[callId] || {})
-            .filter(([teamName]) => updatedAssignedTeam.includes(teamName))
-            .map(([, status]) => status as string);
-
-          if (remainingStatuses.includes('Transporting')) newCallStatus = 'Transporting';
-          else if (remainingStatuses.includes('On Scene')) newCallStatus = 'On Scene';
-          else if (remainingStatuses.includes('En Route')) newCallStatus = 'En Route';
-        }
-      } else {
-        // standard transitions while still assigned
-        if (newStatus === 'On Scene') newCallStatus = 'On Scene';
-        else if (newStatus === 'Transporting') newCallStatus = 'Transporting';
-      }
-
-      // IMPORTANT: set clinic flag here (no second pass / no self-reference)
-      const clinicFlag = (newStatus === 'Delivered' || newCallStatus === 'Delivered') ? true : (c.clinic ?? false);
-
-      // Special handling for Ambulance status - show as "Rolled" but mark as resolved
-      const displayStatus = newCallStatus === 'Resolved' && newStatus === 'Ambulance' ? 'Rolled' : newCallStatus;
-
-      console.log(`[Status Change] Call ${callId} - Team: ${team} -> ${newStatus}`);
-      console.log("Updated Arrays:", {
-        assignedTeam: updatedAssignedTeam,
-        equipmentTeams: updatedEquipmentTeams
-      });
-
-      return {
-        ...c,
-        status: displayStatus,
-        clinic: clinicFlag,
-        log: updatedLog,
-        assignedTeam: updatedAssignedTeam,
-        equipmentTeams: updatedEquipmentTeams,
-        detachedTeams: updatedDetachedTeams
-      };
-    });
+    const updatedCalls = (event?.calls || []).map(c => getUpdatedCallForStatusChange(
+      c, callId, team, newStatus, isEqDetaching, logMessage, event, teamStatusMap
+    ));
 
     // Rest of the function continues as before...
     const updatedStaff = event?.staff.map(t => {
@@ -1406,25 +1053,15 @@ export default function DispatchPage({ params }: DispatchPageProps) {
       let updatedStatus = newStatus;
 
       // Handle equipment detachment statuses
-      if (['Delivered Eq', 'Detached'].includes(newStatus)) {
+      if (['Delivered Eq', 'Detached', 'Refusal', 'NMM', 'Unable to Locate', 'Rolled from Scene'].includes(newStatus)) {
         updatedLocation = t.originalPost || 'Unknown';
         updatedStatus = 'Available';
-      } else if (newStatus === 'Delivered') {
+      } else if (['Delivered', 'In Clinic'].includes(newStatus)) {
         updatedLocation = 'Clinic';
         updatedStatus = 'In Clinic';
-      } else if (['En Route', 'On Scene', 'Transporting'].includes(newStatus)) {
+      } else if (['En Route', 'On Scene', 'Transporting', 'En Route Eq', 'Assisting'].includes(newStatus)) {
         updatedLocation = latestCall.location;
         updatedStatus = newStatus;
-      } else if (['En Route Eq', 'Assisting'].includes(newStatus)) {
-        // Equipment assistance statuses
-        updatedLocation = latestCall.location;
-        updatedStatus = newStatus;
-      } else if (['Refusal', 'NMM', 'Detached', 'Unable to Locate', 'Rolled from Scene'].includes(newStatus)) {
-        updatedLocation = t.originalPost || 'Unknown';
-        updatedStatus = 'Available';
-      } else if (newStatus === 'In Clinic') {
-        updatedLocation = 'Clinic';
-        updatedStatus = 'In Clinic';
       }
 
       return {
@@ -1536,9 +1173,10 @@ export default function DispatchPage({ params }: DispatchPageProps) {
         } else {
           // Other teams remain on the call or the call is still active.
           // Keep equipment marked as In Use and preserve/transfer assignment appropriately.
-          const newAssigned = (callAfterUpdate?.assignedTeam && callAfterUpdate.assignedTeam.length > 0)
-            ? (callAfterUpdate.assignedTeam.includes(team) ? team : callAfterUpdate.assignedTeam[0])
-            : team;
+          let newAssigned = team;
+          if (callAfterUpdate?.assignedTeam && callAfterUpdate.assignedTeam.length > 0) {
+            newAssigned = callAfterUpdate.assignedTeam.includes(team) ? team : callAfterUpdate.assignedTeam[0];
+          }
 
           updatedEquipment = event?.eventEquipment?.map(eq =>
             eq.assignedTeam === team
@@ -1568,6 +1206,22 @@ export default function DispatchPage({ params }: DispatchPageProps) {
 
   const [teamSortMode, setTeamSortMode] = useState<'availability' | 'asc' | 'desc'>('availability');
   const [cardViewMode, setCardViewMode] = useState<'normal' | 'condensed'>('normal');
+
+  const getTeamSortValue = (a: Staff, b: Staff, mode: 'availability' | 'asc' | 'desc') => {
+    const statusRank = (status: string) => {
+      if (status === 'Available') return 0;
+      if (['In Clinic', 'On Break'].includes(status)) return 1;
+      if (['En Route', 'On Scene', 'Transporting'].includes(status)) return 2;
+      return 3;
+    };
+    if (mode === 'availability') {
+      const rA = statusRank(a.status), rB = statusRank(b.status);
+      return rA !== rB ? rA - rB : a.team.localeCompare(b.team, undefined, { numeric: true });
+    }
+    if (mode === 'asc') return a.team.localeCompare(b.team, undefined, { numeric: true });
+    if (mode === 'desc') return b.team.localeCompare(a.team, undefined, { numeric: true });
+    return 0;
+  };
 
   const [selectedLeftTab, setSelectedLeftTab] = useState<string>('teams');
 
@@ -1602,9 +1256,9 @@ export default function DispatchPage({ params }: DispatchPageProps) {
 
     const unsubscribe = onSnapshot(doc(db, 'events', eventId), (doc) => {
       if (doc.exists()) {
-        const eventData = doc.data() as Event;
+        const eventData = doc.data() as EventData;
         // Debug: log event document contents to diagnose missing postingTimes
-        // eslint-disable-next-line no-console
+
         console.log('Firestore snapshot - eventData:', {
           id: doc.id,
           postingTimes: eventData.postingTimes,
@@ -1619,7 +1273,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
         });
 
         const userEmail = user.email?.toLowerCase();
-        const isSharedUser = eventData.sharedWith?.some(email => email.toLowerCase() === userEmail);
+        const isSharedUser = eventData.sharedWith?.some((email: string) => email.toLowerCase() === userEmail);
 
         if (eventData.userId && eventData.userId !== user.uid && !isAdmin && !isSharedUser) {
           console.error('Unauthorized access to event');
@@ -1627,9 +1281,8 @@ export default function DispatchPage({ params }: DispatchPageProps) {
           router.push('/?login=true&error=unauthorized');
           return;
         }
-        setEvent(prev => {
+        setEvent((prev: EventData | undefined) => {
           if (!isEqual(prev, eventData)) {
-            setPostAssignments(eventData.postAssignments || {});
             return eventData;
           }
           return prev;
@@ -1650,231 +1303,6 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     return () => unsubscribe();
   }, [eventId, user, router, isAdmin]);
 
-  const handleRemoveTeamFromCall = async (callId: string, teamToRemove: string) => {
-    if (!event) return;
-
-    // Find the call and team objects
-    const call = event.calls.find(c => c.id === callId);
-    const team = event.staff.find(t => t.team === teamToRemove);
-
-    if (!call || !team) return;
-
-    const now = new Date();
-    const hhmm = now.getHours().toString().padStart(2, '0') +
-      now.getMinutes().toString().padStart(2, '0');
-
-    // Update call log
-    const callLogEntry: CallLogEntry = {
-      timestamp: now.getTime(),
-      message: `${hhmm} - ${teamToRemove} detached from call.`
-    };
-
-    // Update team log
-    const teamLogEntry: TeamLogEntry = {
-      timestamp: now.getTime(),
-      message: `${hhmm} - detached from call #${callDisplayNumberMap.get(callId)} (${callId}); back to post at ${team.location}`
-    };
-
-    // Update call: remove team and add log
-    const updatedCall: Call = {
-      ...call,
-      assignedTeam: (call.assignedTeam || []).filter(t => t !== teamToRemove),
-      status: (call.assignedTeam || []).length <= 1 ? 'Pending' : call.status,
-      log: [...(call.log || []), callLogEntry]
-    };
-
-    // Update team: reset status and add log
-    const updatedTeam: Staff = {
-      ...team,
-      status: 'Available',
-      log: [...(team.log || []), teamLogEntry]
-    };
-
-    // Create updated arrays
-    const updatedCalls = event.calls.map(c =>
-      c.id === callId ? updatedCall : c
-    );
-
-    const updatedStaff = event.staff.map(t =>
-      t.team === teamToRemove ? updatedTeam : t
-    );
-
-    // Save to Firestore
-    await updateEvent({
-      calls: updatedCalls,
-      staff: updatedStaff,
-      postAssignments
-    });
-  };
-
-  // const handlePostAssignment = async (time: string, postKey: string, team: string) => {
-  //   const updatedAssignments = {
-  //     ...postAssignments,
-  //     [time]: {
-  //       ...(postAssignments[time] || {}),
-  //       [postKey]: team,
-  //     },
-  //   };
-  //   setPostAssignments(updatedAssignments);
-  //   await updateEvent({ postAssignments: updatedAssignments });
-  // };
-
-  // const handleClearAllPostAssignments = async () => {
-  //   if (!event) return;
-
-  //   const clearedAssignments: { [time: string]: { [post: string]: string } } = {};
-  //   for (const time of event.postingTimes || []) {
-  //     clearedAssignments[time] = {};
-  //     for (const post of event.eventPosts || []) {
-  //       const postKey = getPostKey(post);
-  //       clearedAssignments[time][postKey] = '';
-  //     }
-  //   }
-
-  //   setPostAssignments(clearedAssignments);
-  //   await updateEvent({ postAssignments: clearedAssignments });
-  // };
-
-  // const handleUpdatePostingTime = async (originalTime: string, newTime: string) => {
-  //   if (!event) return;
-
-  //   const newPostingTimes = event.postingTimes?.map(time => 
-  //     time === originalTime ? newTime : time
-  //   ) || [];
-
-  //   // Update post assignments
-  //   const newPostAssignments = { ...postAssignments };
-  //   if (newPostAssignments[originalTime]) {
-  //     newPostAssignments[newTime] = newPostAssignments[originalTime];
-  //     delete newPostAssignments[originalTime];
-  //   }
-
-  //   // Update Firestore
-  //   await updateEvent({
-  //     postingTimes: newPostingTimes,
-  //     postAssignments: newPostAssignments
-  //   });
-  // };
-
-  // Right-click menu opener
-  // const handleRightClick = (e: React.MouseEvent, callId: string) => {
-  //   e.preventDefault();
-  //   e.stopPropagation();
-  //   setContextMenu({
-  //     x: e.clientX,
-  //     y: e.clientY,
-  //     callId,
-  //   });
-  // };
-
-  // Mark a call as duplicate
-  const handleMarkDuplicate = async (callId: string) => {
-    setSelectedDuplicateCallId(callId);
-    setShowDuplicateModal(true);
-    setContextMenu(null);
-  };
-
-  const handleResolveDuplicate = async (duplicateCallId: string, originalCallId: string) => {
-    const duplicateCall = event?.calls.find(c => c.id === duplicateCallId);
-    if (!duplicateCall) return;
-
-    const now = new Date();
-    const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-
-    const originalCallNumber = callDisplayNumberMap.get(originalCallId);
-
-    // Update call log with duplicate resolution
-    const newLogEntry: CallLogEntry = {
-      timestamp: now.getTime(),
-      message: `${hhmm} - Resolved, duplicate to call #${originalCallNumber}`
-    };
-
-    // Update call: set duplicate & status
-    const updatedCall: Call = {
-      ...duplicateCall,
-      duplicate: true,
-      duplicateOf: originalCallId,
-      status: 'Resolved',
-      // Clear assigned teams when marking as duplicate
-      assignedTeam: [],
-      log: [...(duplicateCall.log || []), newLogEntry]
-    };
-
-    // If there were teams assigned to this duplicate call, we should free them up
-    if (duplicateCall.assignedTeam && duplicateCall.assignedTeam.length > 0) {
-      const updatedStaff = event?.staff.map(staff => {
-        if (duplicateCall.assignedTeam?.includes(staff.team)) {
-          // Free up the team - set them back to Available status at their original location
-          const teamLogEntry: TeamLogEntry = {
-            timestamp: now.getTime(),
-            message: `${hhmm} - freed from duplicate call #${callDisplayNumberMap.get(duplicateCallId)}, back to post`
-          };
-
-          return {
-            ...staff,
-            status: 'Available',
-            location: staff.originalPost || staff.location || 'Unknown',
-            log: [...(staff.log || []), teamLogEntry]
-          };
-        }
-        return staff;
-      });
-
-      // Update both calls and staff
-      const updatedCalls = event?.calls.map(c => c.id === duplicateCallId ? updatedCall : c);
-
-      await updateEvent({
-        calls: updatedCalls,
-        staff: updatedStaff,
-        postAssignments
-      });
-    } else {
-      // Just update the call
-      const updatedCalls = event?.calls.map(c => c.id === duplicateCallId ? updatedCall : c);
-      await updateEvent({ calls: updatedCalls });
-    }
-
-    setShowDuplicateModal(false);
-    setSelectedDuplicateCallId(null);
-  };
-
-  const handleTogglePriority = async (callId: string, priority: boolean) => {
-    const call = event?.calls.find(c => c.id === callId);
-    if (!call) return;
-
-    // Get the current time in HHMM format
-    const now = new Date();
-    const hhmm =
-      now.getHours().toString().padStart(2, '0') +
-      now.getMinutes().toString().padStart(2, '0');
-
-    // Build log message based on checked status
-    const logMessage = `${hhmm} - ${priority ? 'marked as Priority' : 'unmarked as Priority'
-      }`;
-
-    // Add the new log entry
-    const updatedCall = {
-      ...call,
-      priority,
-      log: [...(call.log || []), { timestamp: now.getTime(), message: logMessage }]
-    };
-
-    // Update the calls array
-    const updatedCalls = event?.calls.map(c =>
-      c.id === callId ? updatedCall : c
-    );
-
-    await updateEvent({ calls: updatedCalls });
-  };
-
-  // Toggle Priority (as before)
-  const handleTogglePriorityFromMenu = async (callId: string) => {
-    const call = event?.calls.find(c => c.id === callId);
-    if (!call) return;
-
-    await handleTogglePriority(callId, !call.priority);
-    setContextMenu(null);
-  };
 
   // Close menu when clicking elsewhere
   useEffect(() => {
@@ -1891,226 +1319,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     }
   }, [contextMenu]);
 
-  const addTeamLog = useCallback((staff: Staff, message: string): Staff => {
-    const now = new Date();
-    const hhmm =
-      now.getHours().toString().padStart(2, '0') +
-      now.getMinutes().toString().padStart(2, '0');
-    const newEntry = { timestamp: now.getTime(), message: `${hhmm} - ${message}` };
-    return {
-      ...staff,
-      log: [...(staff.log || []), newEntry],
-    };
-  }, []);
 
-  const handleStatusChange = useCallback(async (staff: Staff, newStatus: string) => {
-    const team = staff.team;
-
-    setTeamTimers(prev => ({ ...prev, [team]: Date.now() }));
-
-    await updateEvent((currentEvent) => {
-
-      const callId = currentEvent.calls.find(c =>
-        c.assignedTeam?.includes(team) &&
-        !['Resolved', 'Available'].includes(c.status)
-      )?.id;
-
-      const now = new Date();
-      const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-      const logMessage = `${hhmm} - ${team} set to ${newStatus}`;
-
-      const updatedStaff = (currentEvent.staff || []).map(s => {
-        if (s.team !== team) return s;
-
-        const teamLogEntry: TeamLogEntry = { timestamp: now.getTime(), message: logMessage };
-
-        return {
-          ...s,
-          status: newStatus,
-          location: newStatus === 'Available' ? (s.originalPost || 'Roaming') : s.location,
-          log: [...(s.log || []), teamLogEntry]
-        };
-      });
-
-      // Update Calls Array (if team was on a call)
-      let updatedCalls = currentEvent.calls || [];
-      if (callId) {
-        updatedCalls = updatedCalls.map(c => {
-          if (c.id !== callId) return c;
-
-          const assignedTeams = c.assignedTeam || [];
-          const teamStatuses = assignedTeams.map(t => {
-            if (t === team) return newStatus; // The new status for current team
-            const s = updatedStaff.find(st => st.team === t);
-            return s ? s.status : 'Available';
-          });
-
-          // Calculate new composite status for the call
-          let newCallStatus = c.status;
-          if (teamStatuses.includes('Transporting')) newCallStatus = 'Transporting';
-          else if (teamStatuses.includes('On Scene')) newCallStatus = 'On Scene';
-          else if (teamStatuses.includes('En Route')) newCallStatus = 'En Route';
-
-          return {
-            ...c,
-            status: newCallStatus,
-            log: [...(c.log || []), { timestamp: now.getTime(), message: logMessage }]
-          };
-        });
-      }
-
-      return {
-        staff: updatedStaff,
-        calls: updatedCalls
-      };
-    });
-  }, [updateEvent]);
-
-  const handleLocationChange = useCallback(async (staff: Staff, newLocation: string) => {
-    const updatedStaff = event?.staff.map(t =>
-      t.team === staff.team
-        ? addTeamLog(
-          {
-            ...t,
-            location: newLocation,
-            status: newLocation === 'Clinic' && t.status === 'Available' ? 'In Clinic' : t.status,
-          },
-          `Post changed to ${newLocation}`
-        )
-        : t
-    );
-    await updateEvent({
-      staff: updatedStaff,
-      postAssignments // Explicitly preserve postAssignments
-    });
-  }, [event, updateEvent, addTeamLog, postAssignments]); // Add postAssignments dependency
-
-  const handleAddTeamToCall = async (callId: string, team: string) => {
-    if (!team || !event) return;
-    const call = event.calls.find(c => c.id === callId);
-    if (!call) return;
-
-    const now = new Date();
-    const hhmm = now.getHours().toString().padStart(2, '0') +
-      now.getMinutes().toString().padStart(2, '0');
-
-    // Update call log
-    const callLogEntry: CallLogEntry = {
-      timestamp: now.getTime(),
-      message: `${hhmm} - ${team} assigned and en route.`
-    };
-
-    // Update team log
-    const teamLogEntry: TeamLogEntry = {
-      timestamp: now.getTime(),
-      message: `${hhmm} - responding to call #${callDisplayNumberMap.get(callId)} (${callId})`
-    };
-
-    const updatedCall: Call = {
-      ...call,
-      assignedTeam: [...(call.assignedTeam || []), team],
-      status: 'Assigned',
-      log: [...(call.log || []), callLogEntry]
-    };
-
-    const updatedStaff = event.staff.map(t =>
-      t.team === team
-        ? {
-          ...t,
-          status: 'En Route',
-          location: call.location,
-          originalPost: t.location || 'Unknown', // Save original post
-          log: [...(t.log || []), teamLogEntry]
-        }
-        : t
-    );
-
-    const updatedCalls = event.calls.map(c =>
-      c.id === callId ? updatedCall : c
-    );
-
-    // Update equipment: mark as In Use any equipment already assigned to this team
-    // or explicitly listed on the call's equipment list.
-    let updatedEquipment = event.eventEquipment || [];
-    try {
-      const callEquipmentNames = new Set(
-        (call.equipment || []).map((n: unknown) => (typeof n === 'string' ? n : (n as { name?: string }).name || ''))
-      );
-      updatedEquipment = (event.eventEquipment || []).map(eq => {
-        const eqName = eq.name;
-        const isListedOnCall = callEquipmentNames.has(eqName);
-        const isCurrentlyAssignedToTeam = eq.assignedTeam === team;
-        if (isListedOnCall || isCurrentlyAssignedToTeam) {
-          return {
-            ...eq,
-            assignedTeam: team,
-            status: 'In Use' as EquipmentStatus,
-            location: call.location || eq.location || team
-          };
-        }
-        return eq;
-      });
-    } catch (e) {
-      console.error('Error updating equipment on team add:', e);
-    }
-
-    await updateEvent({
-      calls: updatedCalls,
-      staff: updatedStaff,
-      postAssignments,
-      eventEquipment: updatedEquipment
-    });
-
-    setTeamToAdd(prev => ({ ...prev, [callId]: '' }));
-  };
-
-  const handleCallUpdate = async (callId: string, updates: Partial<Call>) => {
-    const updatedCalls = event?.calls?.map(call =>
-      call.id === callId ? { ...call, ...updates } : call
-    ) || [];
-    await updateEvent({ calls: updatedCalls });
-  };
-
-  const handleScheduledPostAssignment = useCallback(
-    async (time: string, assignments: { [post: string]: string }) => {
-      if (!event) return;
-
-      // Update each team's location and log
-      let updatedStaff = [...event.staff];
-      const pendingAssignments = event.pendingAssignments ? { ...event.pendingAssignments } : {};
-
-      Object.entries(assignments).forEach(([post, teamName]) => {
-        if (!teamName) return;
-        updatedStaff = updatedStaff.map(staff => {
-          if (staff.team === teamName) {
-            const isBusy = ['En Route', 'On Scene', 'Transporting'].includes(staff.status);
-            if (isBusy) {
-              // Store the pending assignment for this team
-              pendingAssignments[teamName] = { post, time };
-              return staff; // Do not update location or log yet
-            } else {
-              // Update location and log immediately
-              return addTeamLog({ ...staff, location: post }, `Available to ${post} at scheduled time ${time}`);
-            }
-          }
-          return staff;
-        });
-      });
-
-      // Write updates once
-      await updateEvent({
-        staff: updatedStaff,
-        postAssignments: {
-          ...postAssignments,
-          [time]: assignments,
-        },
-        pendingAssignments,
-      });
-
-      notifyPostAssignmentChange(`Scheduled posting change for ${time}`, assignments);
-    },
-    [event, postAssignments, updateEvent, addTeamLog]
-  );
 
   // Tracks when a team entered its current status, in ms since epoch
   const [teamTimers, setTeamTimers] = useState<{ [team: string]: number }>({});
@@ -2202,8 +1411,12 @@ export default function DispatchPage({ params }: DispatchPageProps) {
         if (!hadEntry) {
           lastTeamStatus.current[key] = combinedKey;
           const fromLog = deriveStatusSinceFromLog(team);
-          const seeded = typeof fromLog === 'number' ? fromLog :
-            typeof updated[key] === 'number' ? updated[key] : Date.now();
+          let seeded = Date.now();
+          if (typeof fromLog === 'number') {
+            seeded = fromLog;
+          } else if (typeof updated[key] === 'number') {
+            seeded = updated[key];
+          }
           updated[key] = seeded;
           lastStatusSince.current[key] = seeded;
           return;
@@ -2235,8 +1448,12 @@ export default function DispatchPage({ params }: DispatchPageProps) {
         if (!hadEntry) {
           lastTeamStatus.current[key] = combinedKey;
           const fromLog = deriveStatusSinceFromLogSupervisor(supervisor);
-          const seeded = typeof fromLog === 'number' ? fromLog :
-            typeof updated[key] === 'number' ? updated[key] : Date.now();
+          let seeded = Date.now();
+          if (typeof fromLog === 'number') {
+            seeded = fromLog;
+          } else if (typeof updated[key] === 'number') {
+            seeded = updated[key];
+          }
           updated[key] = seeded;
           lastStatusSince.current[key] = seeded;
           return;
@@ -2269,386 +1486,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     });
   }, [event?.staff, event?.supervisor, staffSignature]);
 
-  const [nextPostingTime, setNextPostingTime] = useState<string | null>(null);
 
-  const computeNextPostingTime = useCallback((current: string, times: string[]): string | null => {
-    if (!times.length) return null;
-
-    // Validate current time format (must be 4-digit HHmm)
-    if (current.length !== 4 || isNaN(parseInt(current))) {
-      console.error(`Invalid current time format: ${current}`);
-      return null;
-    }
-    const currentMins = parseInt(current.substring(0, 2)) * 60 + parseInt(current.substring(2));
-
-    // Process and validate times
-    const validTimes = times
-      .map(t => {
-        // Handle both HH:mm and HHmm formats
-        let hours: string, minutes: string;
-
-        if (t.includes(':')) {
-          [hours, minutes] = t.split(':');
-        } else if (t.length === 3 || t.length === 4) {
-          // Pad to 4 digits for HHmm format
-          const padded = t.padStart(4, '0');
-          hours = padded.substring(0, 2);
-          minutes = padded.substring(2, 4);
-        } else {
-          console.warn(`Skipping invalid time format: ${t}`);
-          return null;
-        }
-
-        // Validate numerical values
-        const hoursNum = parseInt(hours);
-        const minutesNum = parseInt(minutes);
-
-        if (isNaN(hoursNum) || isNaN(minutesNum) ||
-          hoursNum < 0 || hoursNum > 23 ||
-          minutesNum < 0 || minutesNum > 59) {
-          console.warn(`Skipping invalid time: ${t}`);
-          return null;
-        }
-
-        return {
-          time: t,
-          minutes: hoursNum * 60 + minutesNum
-        };
-      })
-      .filter(t => t !== null)
-      .sort((a, b) => a.minutes - b.minutes);
-
-    if (validTimes.length === 0) return null;
-
-    // Find next valid time
-    for (const { minutes, time } of validTimes) {
-      if (minutes > currentMins) return time;
-    }
-
-    // Wrap to first time next day
-    return validTimes.length > 0 ? validTimes[0].time : null;
-  }, []);
-
-  const parseTimeToMinutes = useCallback((timeStr: string): number | null => {
-    // Handle HH:mm format
-    if (timeStr.includes(':')) {
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      if (!isNaN(hours) && !isNaN(minutes))
-        return hours * 60 + minutes;
-    }
-
-    // Handle HHmm format
-    const cleanTime = timeStr.padStart(4, '0');
-    const hours = parseInt(cleanTime.substring(0, 2));
-    const minutes = parseInt(cleanTime.substring(2, 4));
-
-    if (!isNaN(hours) && !isNaN(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59)
-      return hours * 60 + minutes;
-
-    console.warn(`Invalid time format: ${timeStr}`);
-    return null;
-  }, []);
-
-  const triggeredToday = useRef(new Set());
-  const [lastTriggerDate, setLastTriggerDate] = useState(new Date().toDateString());
-
-  useEffect(() => {
-    if (!AUTO_POST_SYNC) return; // new, disables auto post
-    console.log('useEffect: schedule interval tick');
-
-    if (!event || !nextPostingTime) return;
-
-    const interval = setInterval(() => {
-      const now = new Date();
-      const today = now.toDateString();
-      const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-
-      console.log(`[Schedule Check] Current time: ${hhmm}, Next posting time: ${nextPostingTime}`);
-
-      // Reset triggered set at midnight
-      if (today !== lastTriggerDate) {
-        triggeredToday.current = new Set();
-        setLastTriggerDate(today);
-        console.log('[Schedule Check] Reset triggered times for new day');
-      }
-
-      const nextTotalMins = parseTimeToMinutes(nextPostingTime);
-      const currentTotalMins = parseTimeToMinutes(hhmm);
-
-      console.log(`[Schedule Check] Current minutes: ${currentTotalMins}, Next minutes: ${nextTotalMins}`);
-
-      if (nextTotalMins === null || currentTotalMins === null) return;
-
-      // Check if we should trigger
-      if (currentTotalMins >= nextTotalMins && !triggeredToday.current.has(nextPostingTime)) {
-        console.log(`[Schedule Check] TRIGGERING scheduled assignment for ${nextPostingTime}`);
-
-        // Do the scheduled assignment
-        const assignments = postAssignments[nextPostingTime] || {};
-        handleScheduledPostAssignment(nextPostingTime, assignments);
-
-        triggeredToday.current.add(nextPostingTime);
-
-        // Advance to next posting time (wraps to first if at end)
-        const newNextTime = computeNextPostingTime(hhmm, event.postingTimes || []);
-        console.log(`[Schedule Check] Advanced to next posting time: ${newNextTime}`);
-        setNextPostingTime(newNextTime);
-      } else {
-        console.log(`[Schedule Check] Not triggering - either in future (${currentTotalMins < nextTotalMins}) or already triggered (${triggeredToday.current.has(nextPostingTime)})`);
-      }
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [event, nextPostingTime, postAssignments, lastTriggerDate, handleScheduledPostAssignment, computeNextPostingTime, parseTimeToMinutes]);
-
-  const getCurrentActiveTime = useCallback(() => {
-    if (!event?.postingTimes?.length) return null;
-
-    const now = new Date();
-    const currentHHMM = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-
-    // Use the same logic as computeNextPostingTime to stay consistent
-    const nextTime = computeNextPostingTime(currentHHMM, event.postingTimes);
-
-    // If we have a next time, find the current active period
-    if (nextTime) {
-      const currentMins = parseTimeToMinutes(currentHHMM);
-      const allValidTimes = event.postingTimes
-        .map(t => ({ time: t, minutes: parseTimeToMinutes(t) }))
-        .filter(t => t.minutes !== null)
-        .sort((a, b) => a.minutes! - b.minutes!);
-
-      // Find the most recent time that has passed
-      let activeTime = allValidTimes[0]?.time;
-      for (const t of allValidTimes) {
-        if (currentMins !== null && t.minutes !== null && currentMins >= t.minutes) {
-          activeTime = t.time;
-        }
-      }
-
-      // However, if we're past all times for today, highlight the next upcoming time
-      const nextTimeMins = parseTimeToMinutes(nextTime);
-      const lastValidTime = allValidTimes[allValidTimes.length - 1];
-      if (currentMins !== null && nextTimeMins !== null && lastValidTime?.minutes !== null && currentMins > lastValidTime.minutes) {
-        // We're past all times, so highlight the next time (which is the first time tomorrow)
-        return nextTime;
-      }
-      return activeTime;
-    }
-
-    return null;
-  }, [event?.postingTimes, parseTimeToMinutes, computeNextPostingTime]);
-
-  useEffect(() => {
-    if (event?.postingTimes?.length) {
-      const now = new Date();
-      const hhmm = now.getHours().toString().padStart(2, '0') +
-        now.getMinutes().toString().padStart(2, '0');
-      const nextTime = computeNextPostingTime(hhmm, event.postingTimes);
-      setNextPostingTime(nextTime);
-
-      console.log(`Current time: ${hhmm}`);
-      console.log(`All posting times:`, event.postingTimes);
-      console.log(`Next posting time computed: ${nextTime}`);
-
-      // Also compute and log the current active time
-      const activeTime = getCurrentActiveTime();
-      console.log(`Current active time for highlighting: ${activeTime}`);
-    }
-  }, [event?.postingTimes, getCurrentActiveTime, computeNextPostingTime]);
-
-  // Find the currently "active" posting time and then
-  // set each team's location to the post they are assigned to for that time.
-  const refreshAllPostsFromSchedule = useCallback(async () => {
-    if (!event) return;
-
-    const active = getCurrentActiveTime();
-    if (!active) {
-      toast.info('No active posting time to refresh.');
-      return;
-    }
-
-    const assignments = postAssignments[active] || {};
-    if (!Object.keys(assignments).length) {
-      toast.info(`No assignments found for ${active}.`);
-      return;
-    }
-
-    const busy = new Set(['En Route', 'On Scene', 'Transporting']);
-    const now = new Date();
-    const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-
-    let changed = 0;
-    const updatedStaff = (event.staff || []).map(t => {
-      // find which post assigns this team
-      const postForTeam = Object.entries(assignments).find(([, team]) => team === t.team)?.[0];
-      if (!postForTeam) return t;
-
-      // if you want to force even when busy, remove this busy check:
-      if (busy.has(t.status)) {
-        return t; // skip busy teams
-      }
-
-      if (t.location === postForTeam) return t;
-
-      changed++;
-      return {
-        ...t,
-        location: postForTeam,
-        log: [
-          ...(t.log || []),
-          { timestamp: now.getTime(), message: `${hhmm} - Post changed to ${postForTeam} (manual refresh)` }
-        ],
-      };
-    });
-
-    if (changed > 0) {
-      await updateEvent({ staff: updatedStaff });
-      toast.success(`Refreshed ${changed} team${changed === 1 ? '' : 's'} to scheduled posts.`);
-    } else {
-      toast.info('No teams updated (either busy or already at scheduled posts).');
-    }
-  }, [event, postAssignments, getCurrentActiveTime, updateEvent]);
-
-  // Update a single team (for the widget "Refresh Post" action)
-  const refreshTeamFromSchedule = useCallback(async (teamName: string) => {
-    if (!event) return;
-
-    const active = getCurrentActiveTime();
-    if (!active) {
-      toast.info('No active posting time to refresh.');
-      return;
-    }
-    const assignments = postAssignments[active] || {};
-    const postForTeam = Object.entries(assignments).find(([, team]) => team === teamName)?.[0];
-
-    if (!postForTeam) {
-      toast.info(`No scheduled post for ${teamName} at ${active}.`);
-      return;
-    }
-
-    const team = (event.staff || []).find(s => s.team === teamName);
-    if (!team) return;
-
-    // if you want to prevent moving busy teams, keep this:
-    if (['En Route', 'On Scene', 'Transporting'].includes(team.status)) {
-      toast.info(`${teamName} is busy; not moved.`);
-      return;
-    }
-
-    if (team.location === postForTeam) {
-      toast.info(`${teamName} is already at ${postForTeam}.`);
-      return;
-    }
-
-    const now = new Date();
-    const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-
-    const updatedStaff = (event.staff || []).map(s =>
-      s.team === teamName
-        ? {
-          ...s,
-          location: postForTeam,
-          log: [
-            ...(s.log || []),
-            { timestamp: now.getTime(), message: `${hhmm} - Post changed to ${postForTeam} (manual refresh)` }
-          ],
-        }
-        : s
-    );
-
-    await updateEvent({ staff: updatedStaff });
-    toast.success(`${teamName} → ${postForTeam}`);
-  }, [event, postAssignments, getCurrentActiveTime, updateEvent]);
-
-  const sortedAllCalls = useMemo(() => {
-    if (!event?.calls) return [];
-    return [...event.calls].sort((a, b) => parseInt(a.id) - parseInt(b.id)); // Oldest first
-  }, [event?.calls]);
-
-  const callDisplayNumberMap = useMemo(() => {
-    const map = new Map();
-    sortedAllCalls.forEach((call, index) => map.set(call.id, index + 1)); // 1 for first call
-    return map;
-  }, [sortedAllCalls]);
-
-  // const activeCalls = useMemo(() => 
-  //   sortedAllCalls.filter(call => call.status !== 'Resolved'), 
-  //   [sortedAllCalls]
-  // );
-
-  function handleCellClick<K extends keyof Call>(callId: string, field: K, value?: Call[K]) {
-    setEditingCell({ callId, field });
-    setEditValue(typeof value === "string" ? value : value !== undefined && value !== null ? String(value) : "");
-  }
-
-  // function capitalize(str) {
-  //   return str.charAt(0).toUpperCase() + str.slice(1);
-  // }
-
-  function camelCaseToTitle(str: string) {
-    // Insert a space before all caps and capitalize the first letter
-    return str
-      .replace(/([A-Z])/g, ' $1') // chiefComplaint -> chief Complaint
-      .replace(/^./, s => s.toUpperCase()); // chief Complaint -> Chief Complaint
-  }
-
-  async function handleCellBlur<K extends keyof Call>(callId: string, field: K) {
-    const call = event?.calls.find(c => c.id === callId);
-    if (!call) return;
-
-    const prevValue = call[field];
-    const newValue = editValue;
-
-    if (prevValue !== newValue) {
-      const now = new Date();
-      const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-      const action = (prevValue === undefined || prevValue === "" || prevValue === null)
-        ? "set"
-        : "changed";
-      const logMessage = `${hhmm} - ${camelCaseToTitle(field)} ${action} to ${newValue}.`;
-
-      // Add log entry to the call's log
-      const updatedCall = {
-        ...call,
-        [field]: newValue,
-        log: [
-          ...(call.log || []),
-          { timestamp: now.getTime(), message: logMessage }
-        ]
-      };
-
-      // Update the calls array
-      const updatedCalls = event?.calls.map(c => c.id === callId ? updatedCall : c);
-
-      await updateEvent({ calls: updatedCalls });
-    } else {
-      // If no change, just update the value (optional)
-      await handleCallUpdate(callId, { [field]: newValue });
-    }
-
-    setEditingCell(null);
-  }
-
-  const computeCallStatus = (call: Call): string => {
-    if (!Array.isArray(call.assignedTeam)) return call.status || 'Pending';
-
-    if (!event) return call.status || 'Pending';
-
-    if (!call.assignedTeam || call.assignedTeam.length === 0) {
-      return call.status || 'Pending';
-    }
-
-    const teamStatuses = call.assignedTeam
-      .map(teamName => event.staff.find(t => t.team === teamName)?.status)
-      .filter(Boolean) as string[];
-
-    if (teamStatuses.includes('Transporting')) return 'Transporting';
-    if (teamStatuses.includes('On Scene')) return 'On Scene';
-    if (teamStatuses.includes('En Route')) return 'En Route';
-
-    return call.status || 'Assigned';
-  };
 
   function notifyPostAssignmentChange(reason: string, details: Record<string, unknown>) {
     console.log("Post Assignment Change Notification Triggered", new Date().toLocaleTimeString(), "Reason:", reason, details);
@@ -2735,70 +1573,9 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     setOpenCallId(openCallId === id ? null : id);
   };
 
-  // function getPostKey(post: Post): string {
-  //   return typeof post === 'string' ? post : post.name;
-  // }
 
-  // Handler reserved for interactive map marker moves; keep defined for future use
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleTeamMarkerMove = async (teamName: string, newX: number, newY: number) => {
-    if (!event) return;
-    // Find the team's current post object
-    const team = event.staff.find(t => t.team === teamName);
-    if (!team) return;
-    // Find the post object for the team's location
-    const postIdx = event.eventPosts.findIndex(p => (typeof p === 'string' ? p : p.name) === team.location);
-    if (postIdx === -1) return;
 
-    // Update the post's coordinates
-    const posts = [...event.eventPosts];
-    if (typeof posts[postIdx] === 'object') {
-      posts[postIdx] = { ...posts[postIdx], x: newX, y: newY };
-    }
 
-    await updateEvent({
-      venue: {
-        ...event.venue,
-        posts,
-      }
-    });
-  };
-
-  // Handler reserved for interactive equipment marker moves; keep defined for future use
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleEquipmentMarkerMove = async (equipmentId: string, newX: number, newY: number) => {
-    if (!event) return;
-
-    // Find the equipment in eventEquipment array
-    const equipment = event.eventEquipment?.find(eq => eq.id === equipmentId);
-    if (!equipment) return;
-
-    // Find the post object for equipment's current location
-    const postIndex = event.eventPosts?.findIndex(p =>
-      (typeof p === 'string' ? p : p.name) === equipment.location
-    );
-
-    if (postIndex === -1 || !event.eventPosts) {
-      // No matching post found, equipment might not have a valid location
-      console.warn(`No post found for equipment ${equipment.name} at location ${equipment.location}`);
-      return;
-    }
-
-    // Update the post's coordinates
-    const updatedPosts = [...event.eventPosts];
-    if (typeof updatedPosts[postIndex] === 'object') {
-      updatedPosts[postIndex] = {
-        ...updatedPosts[postIndex],
-        x: newX,
-        y: newY
-      };
-    }
-
-    // Save updated posts to the event
-    await updateEvent({
-      eventPosts: updatedPosts
-    });
-  };
 
   if (!event) return <LoadingScreen label="Loading event…" />;
 
@@ -2832,6 +1609,10 @@ export default function DispatchPage({ params }: DispatchPageProps) {
     await updateEvent({ calls: updatedCalls });
     setContextMenu(null);
   };
+
+  let addTooltip = 'Add Equipment';
+  if (selectedLeftTab === 'teams') addTooltip = 'Add Team';
+  else if (selectedLeftTab === 'supervisors') addTooltip = 'Add Supervisor';
 
   return (
     <>
@@ -2971,13 +1752,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
 
                     <div className="flex items-center gap-2">
                       <Tooltip
-                        content={
-                          selectedLeftTab === 'teams'
-                            ? 'Add Team'
-                            : selectedLeftTab === 'supervisors'
-                              ? 'Add Supervisor'
-                              : 'Add Equipment'
-                        }
+                        content={addTooltip}
                         placement="top"
                       >
                         <div>
@@ -3131,25 +1906,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
                       {selectedLeftTab === 'teams' && (
                         <div className={cardViewMode === 'condensed' ? 'space-y-1.5' : 'space-y-3'}>
                           {[...(event?.staff || [])]
-                            .sort((a, b) => {
-                              const statusRank = (status: string) => {
-                                if (status === 'Available' || status === 'Available') return 0;
-                                if (['In Clinic', 'On Break'].includes(status)) return 1;
-                                if (['En Route', 'On Scene', 'Transporting'].includes(status)) return 2;
-                                return 3;
-                              };
-                              if (teamSortMode === 'availability') {
-                                const rA = statusRank(a.status), rB = statusRank(b.status);
-                                return rA !== rB ? rA - rB : a.team.localeCompare(b.team, undefined, { numeric: true });
-                              }
-                              if (teamSortMode === 'asc') {
-                                return a.team.localeCompare(b.team, undefined, { numeric: true });
-                              }
-                              if (teamSortMode === 'desc') {
-                                return b.team.localeCompare(a.team, undefined, { numeric: true });
-                              }
-                              return 0;
-                            })
+                            .sort((a, b) => getTeamSortValue(a, b, teamSortMode))
                             .map(staff => (
                               <TeamWidget
                                 key={staff.team}
@@ -3222,35 +1979,21 @@ export default function DispatchPage({ params }: DispatchPageProps) {
 
                       {/* EQUIPMENT CONTENT */}
                       {selectedLeftTab === 'equipment' && (
-                        <div className="space-y-2">
-                          {(event?.venue?.equipment?.length || event?.eventEquipment?.length) ? (
-                            <>
-                              {/* Sort equipment: active calls at bottom */}
-                              {getEquipmentItems()
-                                .sort((a, b) => {
-                                  const aOnCall = a.status !== 'Available' ? 1 : 0;
-                                  const bOnCall = b.status !== 'Available' ? 1 : 0;
-                                  return aOnCall - bOnCall; // Available first, on-call at bottom
-                                })
-                                .map((equipmentItem) => (
-                                  <EquipmentCard
-                                    key={equipmentItem.name}
-                                    equipment={equipmentItem}
-                                    event={event!}
-                                    onStatusChange={handleEquipmentStatusChange}
-                                    onLocationChange={handleEquipmentLocationChange}
-                                    onMarkReady={handleEquipmentMarkReady}
-                                    onDelete={handleEquipmentDelete}
-                                    updateEvent={updateEvent}
-                                  />
-                                ))}
-                            </>
-                          ) : (
-                            <div className="text-center text-surface-light/50 py-8">
-                              No equipment configured
-                            </div>
-                          )}
-                        </div>
+                        <DispatchEquipmentTab
+                          event={event!}
+                          teamSortMode={teamSortMode}
+                          setTeamSortMode={setTeamSortMode}
+                          handleAddVenueEquipment={handleAddVenueEquipment}
+                          getAvailableVenueEquipment={getAvailableVenueEquipment}
+                          handleResetEquipmentLocations={handleResetEquipmentLocations}
+                          getEquipmentItems={getEquipmentItems}
+                          handleEquipmentStatusChange={handleEquipmentStatusChange}
+                          handleEquipmentLocationChange={handleEquipmentLocationChange}
+                          handleEquipmentMarkReady={handleEquipmentMarkReady}
+                          handleEquipmentDelete={handleEquipmentDelete}
+                          updateEvent={updateEvent}
+                          showHeader={false}
+                        />
                       )}
 
                     </div>
@@ -3288,8 +2031,8 @@ export default function DispatchPage({ params }: DispatchPageProps) {
                         handleTogglePriorityFromMenu={handleTogglePriorityFromMenu}
                         handleDeleteCall={handleDeleteCall}
                         handleTeamStatusChange={handleTeamStatusChange}
-                        handleRemoveTeamFromCall={handleRemoveTeamFromCall}
-                        handleAddTeamToCall={handleAddTeamToCall}
+                        handleRemoveTeamFromCall={(callId, team) => handleRemoveTeamFromCall(callId, team, postAssignments)}
+                        handleAddTeamToCall={(callId, team) => handleAddTeamToCall(callId, team, postAssignments)}
                         getCallRowClass={getCallRowClass}
                         computeCallStatus={computeCallStatus}
                         formatAgeSex={formatAgeSex}
@@ -3470,21 +2213,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
                     <div className={cardViewMode === 'condensed' ? 'space-y-1.5' : 'space-y-3'}>
                       <div className="grid grid-cols-1 gap-3">
                         {[...(event?.staff || [])]
-                          .sort((a, b) => {
-                            const statusRank = (status: string) => {
-                              if (status === 'Available' || status === 'Available') return 0;
-                              if (['In Clinic', 'On Break'].includes(status)) return 1;
-                              if (['En Route', 'On Scene', 'Transporting'].includes(status)) return 2;
-                              return 3;
-                            };
-                            if (teamSortMode === 'availability') {
-                              const rA = statusRank(a.status), rB = statusRank(b.status);
-                              return rA !== rB ? rA - rB : a.team.localeCompare(b.team, undefined, { numeric: true });
-                            }
-                            if (teamSortMode === 'asc') return a.team.localeCompare(b.team, undefined, { numeric: true });
-                            if (teamSortMode === 'desc') return b.team.localeCompare(a.team, undefined, { numeric: true });
-                            return 0;
-                          })
+                          .sort((a, b) => getTeamSortValue(a, b, teamSortMode))
                           .map(staff => (
                             <TeamWidget
                               key={staff.team}
@@ -3529,8 +2258,8 @@ export default function DispatchPage({ params }: DispatchPageProps) {
                                 event={event}
                                 callDisplayNumberMap={callDisplayNumberMap}
                                 teamTimers={teamTimers}
-                                onStatusChange={handleSupervisorStatusChange}
-                                onLocationChange={handleSupervisorLocationChange}
+                                onStatusChange={handleStatusChange}
+                                onLocationChange={handleLocationChange}
                                 onEditTeam={(staff) => {
                                   const correspondingSupervisor = event.supervisor?.find(s => s.team === staff.team);
                                   if (correspondingSupervisor) handleEditSupervisor(correspondingSupervisor);
@@ -3551,350 +2280,60 @@ export default function DispatchPage({ params }: DispatchPageProps) {
               {/* EQUIPMENT TAB */}
               <Tab key="equipment" title="Equipment">
                 <div className="space-y-6 pb-20">
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <h2 className="text-xl font-bold text-surface-light">Equipment</h2>
-                      <div className="flex items-center gap-2">
-                        <Tooltip content="Add Equipment from venue" placement="top">
-                          <div>
-                            <Dropdown>
-                              <DropdownTrigger>
-                                <Button
-                                  isIconOnly
-                                  size="md"
-                                  variant="flat"
-                                  aria-label="Add Equipment"
-                                >
-                                  <Plus className="h-5 w-5" />
-                                </Button>
-                              </DropdownTrigger>
-                              <DropdownMenu
-                                aria-label="Add Equipment"
-                                onAction={(key) => handleAddVenueEquipment(key as string)}
-                              >
-                                {getAvailableVenueEquipment().length > 0 ? (
-                                  getAvailableVenueEquipment().map(equipName => (
-                                    <DropdownItem key={equipName}>{equipName}</DropdownItem>
-                                  ))
-                                ) : (
-                                  <DropdownItem key="none" textValue="No equipment available" isReadOnly>
-                                    No equipment left to add
-                                  </DropdownItem>
-                                )}
-                              </DropdownMenu>
-                            </Dropdown>
-                          </div>
-                        </Tooltip>
-                        <Tooltip content="Reset all equipment locations to defaults" placement="top">
-                          <div>
-                            <Button
-                              isIconOnly
-                              size="md"
-                              variant="flat"
-                              onPress={handleResetEquipmentLocations}
-                              aria-label="Reset equipment locations"
-                            >
-                              <RotateCw className="h-5 w-5" />
-                            </Button>
-                          </div>
-                        </Tooltip>
-                        <Tooltip content="Sort equipment" placement="top">
-                          <div>
-                            <Dropdown>
-                              <DropdownTrigger>
-                                <Button isIconOnly size="md" variant="flat" aria-label="Sort equipment">
-                                  <ArrowDownWideNarrow className="h-5 w-5" />
-                                </Button>
-                              </DropdownTrigger>
-                              <DropdownMenu
-                                aria-label="Sort options"
-                                selectedKeys={[teamSortMode]}
-                                selectionMode="single"
-                                onSelectionChange={(keys) => {
-                                  const selected = Array.from(keys)[0] as 'availability' | 'asc' | 'desc';
-                                  setTeamSortMode(selected);
-                                }}
-                              >
-                                <DropdownItem key="availability">Availability</DropdownItem>
-                                <DropdownItem key="asc">Ascending</DropdownItem>
-                                <DropdownItem key="desc">Descending</DropdownItem>
-                              </DropdownMenu>
-                            </Dropdown>
-                          </div>
-                        </Tooltip>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      {(event?.venue?.equipment?.length || event?.eventEquipment?.length) ? (
-                        <div className="grid grid-cols-1 gap-3">
-                          {getEquipmentItems()
-                            .sort((a, b) => {
-                              const aOnCall = a.status !== 'Available' ? 1 : 0;
-                              const bOnCall = b.status !== 'Available' ? 1 : 0;
-                              return aOnCall - bOnCall;
-                            })
-                            .map((equipmentItem) => (
-                              <EquipmentCard
-                                key={equipmentItem.name}
-                                equipment={equipmentItem}
-                                event={event!}
-                                onStatusChange={handleEquipmentStatusChange}
-                                onLocationChange={handleEquipmentLocationChange}
-                                onMarkReady={handleEquipmentMarkReady}
-                                onDelete={handleEquipmentDelete}
-                                updateEvent={updateEvent}
-                              />
-                            ))}
-                        </div>
-                      ) : (
-                        <div className="text-center text-surface-light/50 py-8">
-                          No equipment configured
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <DispatchEquipmentTab
+                    event={event!}
+                    teamSortMode={teamSortMode}
+                    setTeamSortMode={setTeamSortMode}
+                    handleAddVenueEquipment={handleAddVenueEquipment}
+                    getAvailableVenueEquipment={getAvailableVenueEquipment}
+                    handleResetEquipmentLocations={handleResetEquipmentLocations}
+                    getEquipmentItems={getEquipmentItems}
+                    handleEquipmentStatusChange={handleEquipmentStatusChange}
+                    handleEquipmentLocationChange={handleEquipmentLocationChange}
+                    handleEquipmentMarkReady={handleEquipmentMarkReady}
+                    handleEquipmentDelete={handleEquipmentDelete}
+                    updateEvent={updateEvent}
+                    showHeader={true}
+                  />
                 </div>
               </Tab>
 
               <Tab key="calls" title="Calls">
                 <div className="space-y-6 pb-20">
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <h2 className="text-xl font-bold text-surface-light">Calls</h2>
-                      <div className="flex items-center gap-2">
-                        <Tooltip content="Add new call" placement="top">
-                          <div>
-                            <Button
-                              isIconOnly
-                              size="md"
-                              variant="flat"
-                              aria-label="Add Call"
-                              onPress={() => setShowQuickCallForm(true)}
-                            >
-                              <Plus className="h-5 w-5" />
-                            </Button>
-                          </div>
-                        </Tooltip>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      {[
-                        // Active calls first
-                        ...event.calls
-                          .filter((call: Call) => !['Delivered', 'Refusal', 'NMM', 'Rolled', 'Resolved', 'Unable to Locate'].includes(call.status))
-                          .sort((a: Call, b: Call) => parseInt(a.id) - parseInt(b.id)),
-                        // Show resolved calls when showResolvedCalls is true
-                        ...(showResolvedCalls
-                          ? event.calls
-                            .filter((c: Call) => ['Delivered', 'Refusal', 'NMM', 'Rolled', 'Resolved', 'Unable to Locate'].includes(c.status))
-                            .sort((a: Call, b: Call) => parseInt(a.id) - parseInt(b.id))
-                          : [])
-                      ].map((call: Call) => (
-                        <CallTrackingCard
-                          key={call.id}
-                          call={call}
-                          callDisplayNumber={callDisplayNumberMap.get(call.id) || 0}
-                          event={event}
-                          onLocationChange={async (callId, newLocation) => {
-                            const callToUpdate = event.calls.find(c => c.id === callId);
-                            if (!callToUpdate) return;
-
-                            const now = new Date();
-                            const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-                            const updatedCall = {
-                              ...callToUpdate,
-                              location: newLocation,
-                              log: [...(callToUpdate.log || []), { timestamp: now.getTime(), message: `${hhmm} - Location changed to ${newLocation}.` }]
-                            };
-                            const updatedCalls = event.calls.map(c => c.id === callId ? updatedCall : c);
-                            await updateEvent({ calls: updatedCalls });
-                          }}
-                          onAgeSexChange={async (callId, ageSexValue) => {
-                            const callToUpdate = event.calls.find(c => c.id === callId);
-                            if (!callToUpdate) return;
-
-                            const { age, gender } = parseAgeSex(ageSexValue);
-                            const newAge = age || '';
-                            const newGender = gender || '';
-
-                            const now = new Date();
-                            const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-                            const updatedCall = {
-                              ...callToUpdate,
-                              age: newAge,
-                              gender: newGender,
-                              log: [...(callToUpdate.log || []), { timestamp: now.getTime(), message: `${hhmm} - Age/Sex set to ${formatAgeSex(newAge, newGender) || 'N/A'}.` }]
-                            };
-                            const updatedCalls = event.calls.map(c => c.id === callId ? updatedCall : c);
-                            await updateEvent({ calls: updatedCalls });
-                          }}
-                          onChiefComplaintChange={async (callId, newChiefComplaint) => {
-                            const callToUpdate = event.calls.find(c => c.id === callId);
-                            if (!callToUpdate) return;
-
-                            const now = new Date();
-                            const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-                            const updatedCall = {
-                              ...callToUpdate,
-                              chiefComplaint: newChiefComplaint,
-                              log: [...(callToUpdate.log || []), { timestamp: now.getTime(), message: `${hhmm} - Chief Complaint changed to ${newChiefComplaint}.` }]
-                            };
-                            const updatedCalls = event.calls.map(c => c.id === callId ? updatedCall : c);
-                            await updateEvent({ calls: updatedCalls });
-                          }}
-                          onRemoveTeamFromCall={handleRemoveTeamFromCall}
-                          onAddTeamToCall={handleAddTeamToCall}
-                          handleTeamStatusChange={handleTeamStatusChange}
-                          handleMarkDuplicate={handleMarkDuplicate}
-                          handleTogglePriority={handleTogglePriorityFromMenu}
-                          handleDeleteCall={handleDeleteCall}
-                          formatAgeSex={formatAgeSex}
-                          updateEvent={updateEvent}
-                        />
-                      ))}
-                      {(!event.calls || event.calls.length === 0) && (
-                        <div className="text-center text-surface-light/50 py-8">
-                          No calls
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex justify-center pt-3">
-                      <button
-                        onClick={() => setShowResolvedCalls(prev => !prev)}
-                        className="text-surface-faint text-base hover:text-surface-light"
-                        aria-label="Toggle resolved calls"
-                      >                        {showResolvedCalls ? 'Hide Resolved Calls' : 'Show Resolved Calls'}
-                      </button>
-                    </div>
-                  </div>
+                  <DispatchCallsTab
+                    event={event!}
+                    updateEvent={updateEvent}
+                    callDisplayNumberMap={callDisplayNumberMap}
+                    showResolvedCalls={showResolvedCalls}
+                    setShowResolvedCalls={setShowResolvedCalls}
+                    setShowQuickCallForm={setShowQuickCallForm}
+                    handleRemoveTeamFromCall={(callId, team) => handleRemoveTeamFromCall(callId, team, postAssignments)}
+                    handleAddTeamToCall={(callId, team) => handleAddTeamToCall(callId, team, postAssignments)}
+                    handleTeamStatusChange={handleTeamStatusChange}
+                    handleMarkDuplicate={handleMarkDuplicate}
+                    handleTogglePriorityFromMenu={handleTogglePriorityFromMenu}
+                    handleDeleteCall={handleDeleteCall}
+                    formatAgeSex={formatAgeSex}
+                    parseAgeSex={parseAgeSex}
+                  />
                 </div>
               </Tab>
 
               {/* CLINIC TAB */}
               <Tab key="clinic" title="Clinic">
                 <div className="space-y-6 pb-20">
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <h2 className="text-xl font-bold text-surface-light">
-                        Clinic ({(event.calls || []).filter(c => c.status === 'Delivered' && !c.outcome).length})
-                      </h2>
-                      <div className="flex items-center gap-2">
-                        <Tooltip content="Add clinic walk-up" placement="top">
-                          <div>
-                            <Button
-                              isIconOnly
-                              size="md"
-                              variant="flat"
-                              aria-label="Add Clinic Call"
-                              onPress={() => setShowQuickClinicCallForm(true)}
-                            >
-                              <Plus className="h-5 w-5" />
-                            </Button>
-                          </div>
-                        </Tooltip>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      {[
-                        // Unresolved clinic (Delivered with no outcome)
-                        ...(event.calls || [])
-                          .filter(c => c.status === 'Delivered' && !c.outcome)
-                          .sort((a, b) => parseInt(a.id) - parseInt(b.id)),
-                        // Resolved clinic (Delivered with an outcome) when toggled on
-                        ...(showResolvedClinicCalls
-                          ? (event.calls || [])
-                            .filter(c => c.status === 'Delivered' && !!c.outcome)
-                            .sort((a, b) => parseInt(a.id) - parseInt(b.id))
-                          : [])
-                      ].map((call: Call) => (
-                        <ClinicTrackingCard
-                          key={call.id}
-                          call={call}
-                          callDisplayNumber={callDisplayNumberMap.get(call.id) || 0}
-                          event={event}
-                          onLocationChange={async (callId, newLocation) => {
-                            const callToUpdate = event.calls.find(c => c.id === callId);
-                            if (!callToUpdate) return;
-
-                            const now = new Date();
-                            const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-                            const updatedCall = {
-                              ...callToUpdate,
-                              location: newLocation,
-                              log: [...(callToUpdate.log || []), { timestamp: now.getTime(), message: `${hhmm} - Location changed to ${newLocation}.` }]
-                            };
-                            const updatedCalls = event.calls.map(c => c.id === callId ? updatedCall : c);
-                            await updateEvent({ calls: updatedCalls });
-                          }}
-                          onAgeSexChange={async (callId, ageSexValue) => {
-                            const callToUpdate = event.calls.find(c => c.id === callId);
-                            if (!callToUpdate) return;
-
-                            const { age, gender } = parseAgeSex(ageSexValue);
-                            const newAge = age || '';
-                            const newGender = gender || '';
-
-                            const now = new Date();
-                            const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-                            const updatedCall = {
-                              ...callToUpdate,
-                              age: newAge,
-                              gender: newGender,
-                              log: [...(callToUpdate.log || []), { timestamp: now.getTime(), message: `${hhmm} - Age/Sex set to ${formatAgeSex(newAge, newGender) || 'N/A'}.` }]
-                            };
-                            const updatedCalls = event.calls.map(c => c.id === callId ? updatedCall : c);
-                            await updateEvent({ calls: updatedCalls });
-                          }}
-                          onChiefComplaintChange={async (callId, newChiefComplaint) => {
-                            const callToUpdate = event.calls.find(c => c.id === callId);
-                            if (!callToUpdate) return;
-
-                            const now = new Date();
-                            const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-                            const updatedCall = {
-                              ...callToUpdate,
-                              chiefComplaint: newChiefComplaint,
-                              log: [...(callToUpdate.log || []), { timestamp: now.getTime(), message: `${hhmm} - Chief Complaint changed to ${newChiefComplaint}.` }]
-                            };
-                            const updatedCalls = event.calls.map(c => c.id === callId ? updatedCall : c);
-                            await updateEvent({ calls: updatedCalls });
-                          }}
-                          onOutcomeChange={async (callId, outcome) => {
-                            const callToUpdate = event.calls.find(c => c.id === callId);
-                            if (!callToUpdate) return;
-
-                            const now = new Date();
-                            const hhmm = now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
-                            const updatedCall = {
-                              ...callToUpdate,
-                              outcome: outcome === 'In Clinic' ? undefined : outcome as ClinicOutcome,
-                              log: [...(callToUpdate.log || []), { timestamp: now.getTime(), message: `${hhmm} - Clinic Status: ${outcome}` }]
-                            };
-                            const updatedCalls = event.calls.map(c => c.id === callId ? updatedCall : c);
-                            await updateEvent({ calls: updatedCalls });
-                          }}
-                          handleDeleteCall={handleDeleteCall}
-                          getCallRowClass={getCallRowClass}
-                          formatAgeSex={formatAgeSex}
-                          updateEvent={updateEvent}
-                        />
-                      ))}
-                      {(!event.calls || event.calls.filter(c => c.status === 'Delivered').length === 0) && (
-                        <div className="text-center text-surface-light/50 py-8">
-                          No clinic calls
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex justify-center pt-3">
-                      <button
-                        onClick={() => setShowResolvedClinicCalls(prev => !prev)}
-                        className="text-surface-faint text-base hover:text-surface-light"
-                        aria-label="Toggle resolved clinic calls"
-                      >
-                        {showResolvedClinicCalls ? 'Hide Resolved Clinic Calls' : 'Show Resolved Clinic Calls'}
-                      </button>
-                    </div>
-                  </div>
+                  <DispatchClinicTab
+                    event={event!}
+                    updateEvent={updateEvent}
+                    callDisplayNumberMap={callDisplayNumberMap}
+                    showResolvedClinicCalls={showResolvedClinicCalls}
+                    setShowResolvedClinicCalls={setShowResolvedClinicCalls}
+                    setShowQuickClinicCallForm={setShowQuickClinicCallForm}
+                    handleDeleteCall={handleDeleteCall}
+                    getCallRowClass={getCallRowClass}
+                    formatAgeSex={formatAgeSex}
+                    parseAgeSex={parseAgeSex}
+                  />
                 </div>
               </Tab>
             </Tabs>
@@ -3984,7 +2423,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
                         <td className="px-3 py-2">{call.location || 'N/A'}</td>
                         <td className="px-3 py-2">
                           <Button
-                            onClick={() => handleResolveDuplicate(selectedDuplicateCallId, call.id)}
+                            onClick={() => handleResolveDuplicate(selectedDuplicateCallId, call.id, postAssignments)}
                             className="px-3 py-1 bg-status-red hover:bg-status-red/80 text-white rounded text-sm"
                           >
                             Select

@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation';
 import React, { useEffect, useState, useMemo } from 'react';
 import { db } from '@/app/firebase';
 import { collection, getDocs, query, where, deleteDoc, doc, addDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
-import { venueService } from '@/services/venue.service';
+import { venueService } from '@/features/venues/services/venue.service';
 import type { Venue, Event } from '@/app/types';
 import { useAuth } from '@/hooks/useauth';
 import LoadingScreen from '@/components/ui/loading-screen';
@@ -66,18 +65,7 @@ export default function VenueSelection() {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  // const isEventIncomplete = (data: Partial<Event>) => {
-  //   if (!data.name || data.name.trim() === '') {
-  //     if (data.createdAt) {
-  //       const createdTime = new Date(data.createdAt).getTime();
-  //       const now = Date.now();
-  //       return (now - createdTime) > 5 * 60 * 1000;
-  //     }
-  //     return true;
-  //   }
-  //   return false;
-  // };
+  // Detect mobile viewport
 
   const handleDeleteEvent = async (eventId: string) => {
     const confirm = window.confirm('Are you sure you want to delete this event?');

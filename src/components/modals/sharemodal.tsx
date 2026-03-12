@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { db } from '@/app/firebase';
-import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { venueService } from '@/features/venues/services/venue.service';
+import { eventService } from '@/features/events/services/event.service';
 import {
   Modal,
   ModalContent,
@@ -45,10 +45,8 @@ export default function ShareModal({
 
     setIsLoading(true);
     try {
-      const ref = doc(db, collectionName, resourceId);
-      await updateDoc(ref, {
-        sharedWith: arrayUnion(emailInput.trim().toLowerCase())
-      });
+      const service = collectionName === 'venues' ? venueService : eventService;
+      await service.shareWith(resourceId, emailInput.trim().toLowerCase());
       setEmailInput('');
       onUpdate();
     } catch (error) {
@@ -61,13 +59,11 @@ export default function ShareModal({
 
   const handleRemoveUser = async (email: string) => {
     if (!confirm(`Remove access for ${email}?`)) return;
-    
+
     setIsLoading(true);
     try {
-      const ref = doc(db, collectionName, resourceId);
-      await updateDoc(ref, {
-        sharedWith: arrayRemove(email)
-      });
+      const service = collectionName === 'venues' ? venueService : eventService;
+      await service.unshareWith(resourceId, email);
       onUpdate();
     } catch (error) {
       console.error('Error removing user:', error);
@@ -96,8 +92,8 @@ export default function ShareModal({
                   input: "outline-none focus:outline-none data-[focus=true]:outline-none"
                 }}
               />
-              <Button 
-                color="primary" 
+              <Button
+                color="primary"
                 isIconOnly
                 isLoading={isLoading}
                 onPress={handleAddUser}

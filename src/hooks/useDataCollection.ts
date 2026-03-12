@@ -1,7 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { MouseClickLog, KeyStrokeLog, InteractionSession } from '@/app/types';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { db } from '@/app/firebase';
+import { eventService } from '@/features/events/services/event.service';
 
 interface UseDataCollectionProps {
   eventId: string;
@@ -53,9 +52,7 @@ export function useDataCollection({ eventId, enabled = true }: UseDataCollection
     try {
       sessionRef.current.endTime = Date.now();
 
-      await updateDoc(doc(db, 'events', eventId), {
-        interactionSessions: arrayUnion(sessionRef.current)
-      });
+      await eventService.logInteractionSession(eventId, sessionRef.current as unknown as Record<string, unknown>);
 
     } catch (error) {
       console.error('Error saving interaction session:', error);

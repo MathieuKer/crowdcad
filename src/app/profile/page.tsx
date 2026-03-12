@@ -3,13 +3,14 @@
 import React, { useEffect, useState } from 'react';
 import { FirebaseError } from 'firebase/app';
 import { useAuth } from '@/hooks/useauth';
-import { Avatar, Button, Card, CardBody, Input, Select, SelectItem, Tabs, Tab } from '@heroui/react';
-import { auth, db } from '@/app/firebase';
+import { Avatar, Button, Card, CardBody, Input, Tabs, Tab } from '@heroui/react';
+import { auth } from '@/app/firebase';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider, signOut, deleteUser } from 'firebase/auth';
-import { doc, setDoc, collection, query, where, getDocs, getDoc, deleteDoc } from 'firebase/firestore';
+import { userService } from '@/services/user.service';
+import { dispatchLogService } from '@/features/dispatch/services/dispatchLog.service';
 import { DiagonalStreaksFixed } from '@/components/ui/diagonal-streaks-fixed';
 import LoadingScreen from '@/components/ui/loading-screen';
-import { User, Shield, Database, Settings, HelpCircle, LogOut, Trash2, Download, Eye, EyeOff } from 'lucide-react';
+import { User, Shield, Database, Settings, LogOut, Trash2, Download, Eye, EyeOff } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, ready } = useAuth();
@@ -43,11 +44,9 @@ export default function ProfilePage() {
     // Load user data
     const loadUserData = async () => {
       try {
-        const userRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setLastPasswordChange(data.lastPasswordChange?.toDate() || null);
+        const data = await userService.getById(user.uid);
+        if (data) {
+          setLastPasswordChange(data.lastPasswordChange || null);
         }
       } catch (err) {
         console.error('Error loading user data:', err);
@@ -57,9 +56,8 @@ export default function ProfilePage() {
     // Load dispatch logs
     const loadDispatchLogs = async () => {
       try {
-        const logsQuery = query(collection(db, 'dispatchLogs'), where('userId', '==', user.uid));
-        const logsSnap = await getDocs(logsQuery);
-        setDispatchLogs(logsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const logs = await dispatchLogService.getByUserId(user.uid);
+        setDispatchLogs(logs);
       } catch (err) {
         console.error('Error loading dispatch logs:', err);
       }
@@ -94,12 +92,11 @@ export default function ProfilePage() {
       const cred = EmailAuthProvider.credential(auth.currentUser.email || '', currentPassword);
       await reauthenticateWithCredential(auth.currentUser, cred);
       await updatePassword(auth.currentUser, newPassword);
-      
+
       // Update last password change
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      await setDoc(userRef, { lastPasswordChange: new Date() }, { merge: true });
+      await userService.upsert(auth.currentUser.uid, { lastPasswordChange: new Date() });
       setLastPasswordChange(new Date());
-      
+
       setMessage('Password updated successfully.');
       setCurrentPassword('');
       setNewPassword('');
@@ -144,11 +141,10 @@ export default function ProfilePage() {
     try {
       const cred = EmailAuthProvider.credential(auth.currentUser.email || '', deletePassword);
       await reauthenticateWithCredential(auth.currentUser, cred);
-      
+
       // Delete user data
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      await deleteDoc(userRef);
-      
+      await userService.delete(auth.currentUser.uid);
+
       // Delete account
       await deleteUser(auth.currentUser);
     } catch (err) {
@@ -211,129 +207,129 @@ export default function ProfilePage() {
             >
               <div className="space-y-6 w-full">
                 <h2 className="text-3xl font-bold mb-6">Account</h2>
-                    
-                    <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
-                      <CardBody className="p-6">
-                        <h3 className="text-xl font-semibold mb-4">Profile Information</h3>
-                        <div className="flex items-center gap-4 mb-4">
-                          <Avatar
-                            name={user.displayName || user.email || 'U'}
-                            isBordered
-                            showFallback
-                            className="w-16 h-16"
-                          />
-                          <div>
-                            <p className="text-lg font-medium">{user.displayName || 'No display name'}</p>
-                            <p className="text-surface-light/70">{user.email}</p>
+
+                <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
+                  <CardBody className="p-6">
+                    <h3 className="text-xl font-semibold mb-4">Profile Information</h3>
+                    <div className="flex items-center gap-4 mb-4">
+                      <Avatar
+                        name={user.displayName || user.email || 'U'}
+                        isBordered
+                        showFallback
+                        className="w-16 h-16"
+                      />
+                      <div>
+                        <p className="text-lg font-medium">{user.displayName || 'No display name'}</p>
+                        <p className="text-surface-light/70">{user.email}</p>
+                      </div>
+                    </div>
+                  </CardBody>
+                </Card>
+
+                <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
+                  <CardBody className="p-6">
+                    <h3 className="text-xl font-semibold mb-4">Security</h3>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Current Password</label>
+                          <div className="relative">
+                            <Input
+                              type={showCurrentPassword ? "text" : "password"}
+                              value={currentPassword}
+                              onChange={(e) => setCurrentPassword(e.target.value)}
+                              placeholder="Enter current password"
+                              classNames={{
+                                inputWrapper: "rounded-2xl px-4 hover:bg-surface-deep",
+                                input: "text-surface-light outline-none focus:outline-none data-[focus=true]:outline-none",
+                              }}
+                              endContent={
+                                <button
+                                  type="button"
+                                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                  className="text-surface-light/70 hover:text-surface-light"
+                                >
+                                  {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                              }
+                            />
                           </div>
                         </div>
-                      </CardBody>
-                    </Card>
-
-                    <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
-                      <CardBody className="p-6">
-                        <h3 className="text-xl font-semibold mb-4">Security</h3>
                         <div className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                              <label className="block text-sm font-medium mb-2">Current Password</label>
-                              <div className="relative">
-                                <Input
-                                  type={showCurrentPassword ? "text" : "password"}
-                                  value={currentPassword}
-                                  onChange={(e) => setCurrentPassword(e.target.value)}
-                                  placeholder="Enter current password"
-                                  classNames={{
-                                    inputWrapper: "rounded-2xl px-4 hover:bg-surface-deep",
-                                    input: "text-surface-light outline-none focus:outline-none data-[focus=true]:outline-none",
-                                  }}
-                                  endContent={
-                                    <button
-                                      type="button"
-                                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                                      className="text-surface-light/70 hover:text-surface-light"
-                                    >
-                                      {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                    </button>
-                                  }
-                                />
-                              </div>
-                            </div>
-                            <div className="space-y-4">
-                              <div>
-                                <label className="block text-sm font-medium mb-2">New Password</label>
-                                <div className="relative">
-                                  <Input
-                                    type={showNewPassword ? "text" : "password"}
-                                    value={newPassword}
-                                    onChange={(e) => setNewPassword(e.target.value)}
-                                    placeholder="Enter new password"
-                                    classNames={{
-                                      inputWrapper: "rounded-2xl px-4 hover:bg-surface-deep",
-                                      input: "text-surface-light outline-none focus:outline-none data-[focus=true]:outline-none",
-                                    }}
-                                    endContent={
-                                      <button
-                                        type="button"
-                                        onClick={() => setShowNewPassword(!showNewPassword)}
-                                        className="text-surface-light/70 hover:text-surface-light"
-                                      >
-                                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                      </button>
-                                    }
-                                  />
-                                </div>
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium mb-2">Confirm New Password</label>
-                                <div className="relative">
-                                  <Input
-                                    type={showConfirmPassword ? "text" : "password"}
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    placeholder="Confirm new password"
-                                    classNames={{
-                                      inputWrapper: "rounded-2xl px-4 hover:bg-surface-deep",
-                                      input: "text-surface-light outline-none focus:outline-none data-[focus=true]:outline-none",
-                                    }}
-                                    endContent={
-                                      <button
-                                        type="button"
-                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        className="text-surface-light/70 hover:text-surface-light"
-                                      >
-                                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                      </button>
-                                    }
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-end">
-                              <Button onClick={handleChangePassword} disabled={passwordSaving} className="bg-accent w-full">
-                                {passwordSaving ? 'Updating...' : 'Update Password'}
-                              </Button>
+                          <div>
+                            <label className="block text-sm font-medium mb-2">New Password</label>
+                            <div className="relative">
+                              <Input
+                                type={showNewPassword ? "text" : "password"}
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                placeholder="Enter new password"
+                                classNames={{
+                                  inputWrapper: "rounded-2xl px-4 hover:bg-surface-deep",
+                                  input: "text-surface-light outline-none focus:outline-none data-[focus=true]:outline-none",
+                                }}
+                                endContent={
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowNewPassword(!showNewPassword)}
+                                    className="text-surface-light/70 hover:text-surface-light"
+                                  >
+                                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                  </button>
+                                }
+                              />
                             </div>
                           </div>
-                          {passwordError && <p className="text-status-red text-sm">{passwordError}</p>}
-                          {lastPasswordChange && (
-                            <p className="text-xs text-surface-light/70">
-                              Last changed: {lastPasswordChange.toLocaleDateString()}
-                            </p>
-                          )}
+                          <div>
+                            <label className="block text-sm font-medium mb-2">Confirm New Password</label>
+                            <div className="relative">
+                              <Input
+                                type={showConfirmPassword ? "text" : "password"}
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                placeholder="Confirm new password"
+                                classNames={{
+                                  inputWrapper: "rounded-2xl px-4 hover:bg-surface-deep",
+                                  input: "text-surface-light outline-none focus:outline-none data-[focus=true]:outline-none",
+                                }}
+                                endContent={
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                    className="text-surface-light/70 hover:text-surface-light"
+                                  >
+                                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                  </button>
+                                }
+                              />
+                            </div>
+                          </div>
                         </div>
-                      </CardBody>
-                    </Card>
+                        <div className="flex items-end">
+                          <Button onClick={handleChangePassword} disabled={passwordSaving} className="bg-accent w-full">
+                            {passwordSaving ? 'Updating...' : 'Update Password'}
+                          </Button>
+                        </div>
+                      </div>
+                      {passwordError && <p className="text-status-red text-sm">{passwordError}</p>}
+                      {lastPasswordChange && (
+                        <p className="text-xs text-surface-light/70">
+                          Last changed: {lastPasswordChange.toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  </CardBody>
+                </Card>
 
-                    <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
-                      <CardBody className="p-6">
-                        <h3 className="text-xl font-semibold mb-4">Session</h3>
-                        <Button onClick={handleSignOut} startContent={<LogOut className="w-4 h-4" />} className="w-full bg-accent">
-                          Sign Out
-                        </Button>
-                      </CardBody>
-                    </Card>
-                  </div>
+                <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
+                  <CardBody className="p-6">
+                    <h3 className="text-xl font-semibold mb-4">Session</h3>
+                    <Button onClick={handleSignOut} startContent={<LogOut className="w-4 h-4" />} className="w-full bg-accent">
+                      Sign Out
+                    </Button>
+                  </CardBody>
+                </Card>
+              </div>
             </Tab>
 
             <Tab
@@ -347,13 +343,13 @@ export default function ProfilePage() {
             >
               <div className="space-y-6 w-full">
                 <h2 className="text-3xl font-bold mb-6">Affiliations & Access</h2>
-                    
-                    <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
-                      <CardBody className="p-6">
-                        <p className="text-surface-light/70">Organization features are currently unavailable.</p>
-                      </CardBody>
-                    </Card>
-                  </div>
+
+                <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
+                  <CardBody className="p-6">
+                    <p className="text-surface-light/70">Organization features are currently unavailable.</p>
+                  </CardBody>
+                </Card>
+              </div>
             </Tab>
 
             <Tab
@@ -367,42 +363,42 @@ export default function ProfilePage() {
             >
               <div className="space-y-6 w-full">
                 <h2 className="text-3xl font-bold mb-6">Data & Privacy</h2>
-                    
-                    <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
-                      <CardBody className="p-6">
-                        <h3 className="text-xl font-semibold mb-4">Your Data</h3>
-                        <div className="space-y-4">
-                          <div>
-                            <p className="font-medium mb-2">Dispatch Logs</p>
-                            <p className="text-sm text-surface-light/70">{dispatchLogs.length} entries</p>
-                          </div>
-                          <Button onClick={handleExportData} startContent={<Download className="w-4 h-4" />}>
-                            Export Data
-                          </Button>
-                        </div>
-                      </CardBody>
-                    </Card>
 
-                    <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
-                      <CardBody className="p-6">
-                        <div className="space-y-4">
-                          <div>
-                            <p className="font-medium mb-2">Delete Account</p>
-                            <p className="text-sm text-surface-light/70 mb-4">
-                              This will permanently delete your account and all associated data.
-                            </p>
-                            <Button 
-                              onClick={() => setShowDeleteConfirm(true)} 
-                              color="danger" 
-                              startContent={<Trash2 className="w-4 h-4" />}
-                            >
-                              Delete Account
-                            </Button>
-                          </div>
-                        </div>
-                      </CardBody>
-                    </Card>
-                  </div>
+                <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
+                  <CardBody className="p-6">
+                    <h3 className="text-xl font-semibold mb-4">Your Data</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="font-medium mb-2">Dispatch Logs</p>
+                        <p className="text-sm text-surface-light/70">{dispatchLogs.length} entries</p>
+                      </div>
+                      <Button onClick={handleExportData} startContent={<Download className="w-4 h-4" />}>
+                        Export Data
+                      </Button>
+                    </div>
+                  </CardBody>
+                </Card>
+
+                <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
+                  <CardBody className="p-6">
+                    <div className="space-y-4">
+                      <div>
+                        <p className="font-medium mb-2">Delete Account</p>
+                        <p className="text-sm text-surface-light/70 mb-4">
+                          This will permanently delete your account and all associated data.
+                        </p>
+                        <Button
+                          onClick={() => setShowDeleteConfirm(true)}
+                          color="danger"
+                          startContent={<Trash2 className="w-4 h-4" />}
+                        >
+                          Delete Account
+                        </Button>
+                      </div>
+                    </div>
+                  </CardBody>
+                </Card>
+              </div>
             </Tab>
 
             <Tab
@@ -416,12 +412,12 @@ export default function ProfilePage() {
             >
               <div className="space-y-6 w-full">
                 <h2 className="text-3xl font-bold mb-6">Preferences</h2>
-                  <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
-                    <CardBody className="p-6">
-                      <p className="text-surface-light/70">Preferences configuration coming soon...</p>
-                    </CardBody>
-                  </Card>
-                </div>
+                <Card isBlurred className="w-full border border-default-200 bg-surface-deep/40">
+                  <CardBody className="p-6">
+                    <p className="text-surface-light/70">Preferences configuration coming soon...</p>
+                  </CardBody>
+                </Card>
+              </div>
             </Tab>
           </Tabs>
         </div>
