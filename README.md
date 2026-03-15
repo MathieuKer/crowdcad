@@ -43,19 +43,7 @@ Demo and more information: [crowdcad.org](https://crowdcad.org)
    ```
 2. Fill in your Firebase configuration variables in `.env.local`. 
 
-For development and testing, you can use these pre-configured values:
-
-```bash
-NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyApb8e4ttLGlfWlu6g7e7pJ8e05tJVr-0A
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=crowdcad-math.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=crowdcad-math
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=crowdcad-math.firebasestorage.app
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=1060321130787
-NEXT_PUBLIC_FIREBASE_APP_ID=1:1060321130787:web:f81da994b66d138bf9f496
-NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-DVBXZ4ZMTF
-
-DISABLE_TELEMETRY=true
-```
+For development and testing, copy `.env.example` to `.env.local` and fill in your Firebase configuration variables. See **[docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md)** for detailed instructions.
 
 ### 💻 Local Development
 
@@ -99,10 +87,7 @@ docker compose down
 
 ## 🔑 Default Credentials
 
-For initial testing after launching the project, use the following credentials:
-
-- **Email:** `test@test.test`
-- **Password:** `Allo1234`
+For initial testing after launching the project, refer to your local environment configuration or your organization's administrator for credentials.
 
 ---
 
