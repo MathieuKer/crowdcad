@@ -1,70 +1,51 @@
 # Architecture Overview
 
-This document gives a concise overview of CrowdCAD's architecture and where key pieces live in the repository.
+CrowdCAD is designed with a modular, extensible, and domain-centered approach (Domain-Driven Design). It combines **Next.js (App Router)** with a **Feature-based** organization and a service layer inspired by **Clean Architecture**.
 
-High level
-- Frontend: Next.js (App Router), TypeScript, React (server components by default). UI built using TailwindCSS and HeroUI components.
-- Backend / persistence: Firebase (Authentication, Firestore, Cloud Storage). Dataconnect schema exists for connector integration.
-- Hosting / CI: Firebase Hosting is used for deployment; CI commonly uses GitHub Actions.
+```mermaid
+graph TD
+    App[src/app - Routing & Layouts] --> Features[src/features - Domain Modules]
+    Features --> Services[src/services - Shared Logic & API]
+    Services --> Firestore[Firebase/Firestore]
+    Features --> Components[src/components - Shared UI]
+    Features --> Hooks[src/hooks - Shared Hooks]
+```
 
-Repository layout (important folders)
+## Repository Structure
 
-- `src/app/` — Next.js App Router source: top-level layouts and pages (server components by default). Key files:
-  - `src/app/layout.tsx` — root layout and providers
-  - `src/app/firebase.ts` — Firebase initialization (Auth, Firestore, Storage)
-  - `src/app/types.ts` — core TypeScript domain types used across the app
+### 1. `src/features` (The Core Business Logic)
+The project is divided into functional domains. Each feature folder (e.g., `dispatch`, `events`, `venues`) is self-contained and includes:
+- **components/**: React components specific to this feature.
+- **hooks/**: State logic and side effects (e.g., `useDispatchCallsAdvanced.ts`).
+- **services/**: (Optional) Data logic specific to the feature.
 
-- `src/components/` — UI components grouped by role:
-  - `src/components/modals/` — modal components (modal files follow `*modal.tsx` naming)
-  - `src/components/dispatch/` — dispatch-specific UI (cards, tracking widgets)
-  - `src/components/layout/` — layout-level components (navbar, etc.)
-  - `src/components/ui/` — small reusable primitives (Button, Input, Tooltip, Sidebar)
+### 2. `src/services` (Data Abstractions)
+Contains reusable services for interacting with Firebase and other external systems.
+- **FirestoreService.ts**: An agnostic (generic) base class that handles basic CRUD operations.
+- **user.service.ts**: Specialized service for user management, extending or using the generic FirestoreService.
 
-- `src/hooks/` — shared React hooks (auth, mobile helpers, data collection)
-- `src/lib/` — utilities (e.g., `utils.ts` and `cn()` helpers)
-- `dataconnect/` — GraphQL schema and connector definitions used for backend connectors
-- `docs/` — user and developer documentation (this folder)
+### 3. `src/app` (Presentation Layer)
+Powered by the Next.js **App Router**.
+- Manages routing, SSR/CSR, and global layouts.
+- Pages primarily act as orchestrators, importing components from `features` instead of housing complex business logic.
 
-Key architectural decisions
+### 4. Shared Layers
+- **`src/components`**: Atomic UI Kit (reusable buttons, inputs, modals).
+- **`src/hooks`**: Global utility hooks (authentication, navigation, etc.).
 
-- App Router / Server Components: Pages under `src/app` are server components by default. Client interactivity (hooks, event handlers) requires the `'use client'` directive at the top of the file.
-- Firebase-first: The app uses Firebase for auth, realtime persistence, storage and hosting. `src/app/firebase.ts` centralizes initialization and should not be edited lightly.
-- Component-first UI: UI is organized around modular components and small primitives in `src/components/ui` so features compose cleanly.
-- Tailwind + HeroUI: Tailwind utility classes are used for styling; HeroUI provides higher-level components.
+## Key Principles
+- **Feature Isolation**: We maintain low coupling between features (e.g., `features/events` should not directly depend on internal details of `features/dispatch`).
+- **Clean Service Layer**: UI components should not interact with Firestore directly; instead, they should use abstraction services.
+- **Strict Typing**: Heavy use of TypeScript to ensure data consistency and developer productivity.
 
-Data model and types
+---
+*For detailed repository layout and historical context, refer to the original sections below.*
 
-- Core domain types are stored in `src/app/types.ts` and are used throughout pages and components.
-- Firestore documents follow shapes referenced in the frontend and enforced by Firestore rules (deployed per-organization).
-- For backend connector integrations, see `dataconnect/schema/schema.gql`.
+## Legacy Layout Details
 
-Authentication & security
-
-- Firebase Authentication is used for user identity; `useauth.ts` in `src/hooks` wraps auth state for components.
-- Sensitive production configuration (service accounts, BAAs) must be handled per-organization — see `docs/FIREBASE_SETUP.md` and `docs/DEPLOYMENT.md` for guidance.
-
-Development & testing
-
-- Local development: run `npm install` then `npm run dev` from the repository root.
-- Emulator Suite: use the Firebase Emulator Suite for testing Firestore, Auth, and Storage rules locally.
-
-Build & Deploy
-
-- Build scripts are defined in `package.json` (`dev`, `build`, `start`).
-- Deploy with the Firebase CLI (`firebase deploy`) or from CI using a `FIREBASE_TOKEN` or Workload Identity Federation.
-
-Where to look for examples
-
-- Client-side modal example: `src/components/modals/event/quickcallmodal.tsx`
-- UI primitives: `src/components/ui/button.tsx`, `src/components/ui/input.tsx`
-- Dispatch widgets: `src/components/dispatch/teamcard.tsx` and `calltrackingcard.tsx`
-
-Maintainers & contact
-
-- Maintainers: Evan Passalacqua (`@evanqua`) and Ivan Zhang (`@iv-zhang`).
-- Security reports: `support@crowdcad.org` or GitHub Security Advisories.
-
-Notes
-
-- Keep changes small and scoped; add tests for backend rules when modifying data shapes.
-- When adding client components, remember to add `'use client'` and import only client-safe modules.
+- `src/app/` — Next.js App Router source: top-level layouts and pages.
+- `src/components/` — UI components grouped by role.
+- `src/hooks/` — shared React hooks.
+- `src/lib/` — utilities (e.g., `utils.ts` and `cn()` helpers).
+- `dataconnect/` — GraphQL schema and connector definitions.
+- `docs/` — user and developer documentation.

@@ -117,6 +117,14 @@ For initial testing after launching the project, use the following credentials:
 
 ---
 
+## 🏛️ Project Architecture
+
+CrowdCAD follows a **Feature-Sliced Design (FSD)** inspired architecture, organized around functional domains (e.g., Dispatch, Events, Teams). It uses a clean service layer to abstract Firebase interactions, ensuring that business logic remains decoupled from infrastructure.
+
+For a detailed breakdown of the technical design, directory structure, and core principles, see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
+---
+
 ## 📖 Further Documentation
 
 - **User Guide:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
