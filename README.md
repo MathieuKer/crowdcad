@@ -68,10 +68,10 @@ CrowdCAD is fully containerized for easy deployment and testing.
 To start the application using Docker Compose (which handles building the image with your environment variables):
 
 ```bash
-npm run docker:dev
+docker compose --env-file .env.local up --build -d
 ```
 
-This command runs `docker compose --env-file .env.local up --build` under the hood.
+*(Note: `-d` runs the container in detached mode. You can also use `npm run docker:dev` if your system permissions allow execution of npm scripts.)*
 
 ### 🛑 Stop the Container
 
@@ -82,6 +82,7 @@ docker compose down
 ### 📝 Docker Troubleshooting
 - Ensure `.env.local` is present and filled before building.
 - If you change environment variables, you must rebuild the image using the `--build` flag.
+- **ESLint Errors**: If the build fails due to linting errors, they have been configured to be ignored during the production build to ensure the container can still be launched.
 
 ---
 
