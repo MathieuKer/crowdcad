@@ -2,7 +2,7 @@ import { createBdd } from 'playwright-bdd';
 import { expect } from '@playwright/test';
 import { test } from '../fixtures';
 import { UPLOAD_TIMEOUT } from '../timeouts';
-import path from 'path';
+import path from 'node:path';
 
 const { When, Then } = createBdd(test);
 

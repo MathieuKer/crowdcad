@@ -21,7 +21,7 @@ const requiredKeys = ['apiKey', 'projectId', 'authDomain', 'storageBucket'];
 const missing = requiredKeys.filter((k) => !firebaseConfig[k]);
 if (missing.length) {
   const msg = `Missing required Firebase env vars: ${missing.join(', ')}. Copy .env.example to .env.local and fill in your values.`;
-  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
+  if (typeof globalThis.window !== 'undefined' && process.env.NODE_ENV === 'production') {
     throw new Error(msg);
   } else {
     console.warn(msg);
@@ -56,7 +56,7 @@ function createAuth() {
 // SSR: Firebase Auth requires a browser environment. Return a Proxy that throws
 // a clear error if any property is accessed server-side, rather than silently
 // returning null which leads to cryptic "cannot read property of null" errors.
-export const auth = typeof window === 'undefined'
+export const auth = typeof globalThis.window === 'undefined'
   ? new Proxy({} as ReturnType<typeof getAuth>, {
       get(_, prop) {
         throw new Error(
@@ -72,7 +72,7 @@ export const auth = typeof window === 'undefined'
 // Firestore emulator: requires Java — enable separately with NEXT_PUBLIC_USE_FIRESTORE_EMULATOR=true.
 // The global flag guards against duplicate connections during Next.js HMR.
 const g = globalThis as unknown as { __FIREBASE_EMULATORS_CONNECTED?: boolean };
-if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true' && !g.__FIREBASE_EMULATORS_CONNECTED) {
+if (typeof globalThis.window !== 'undefined' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true' && !g.__FIREBASE_EMULATORS_CONNECTED) {
   g.__FIREBASE_EMULATORS_CONNECTED = true;
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
   if (process.env.NEXT_PUBLIC_USE_FIRESTORE_EMULATOR === 'true') {

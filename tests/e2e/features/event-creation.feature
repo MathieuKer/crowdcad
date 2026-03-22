@@ -34,3 +34,15 @@ Feature: Event creation
   Scenario: Equipment tab renders correctly
     When I click the "Equipment" tab
     Then I should see the heading "Equipment"
+
+  Scenario: A supervisor can be added during event creation
+    When I click the "Supervisors" tab
+    And I click the add event supervisor button
+    And I fill the supervisor call sign with "Lead-1"
+    And I select event supervisor certification "EMT-P"
+    And I click the "Add Supervisor" button in the modal
+    Then I should see the text "Lead-1"
+
+  Scenario: Event name field accepts input
+    When I fill the event name with "My Custom Event"
+    Then I should see the "Enter event name" placeholder

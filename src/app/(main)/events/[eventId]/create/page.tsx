@@ -754,6 +754,7 @@ export default function EventCreation() {
                           <Button
                             isIconOnly
                             size="sm"
+                            aria-label="Add Supervisor"
                             onPress={() => setIsSupervisorModalOpen(true)}
                             className="min-w-8 w-8 h-8"
                             style={{ backgroundColor: '#27272a' }}

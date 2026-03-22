@@ -132,8 +132,21 @@ Then('the end event modal should be closed', async ({ page }) => {
 // Section switching
 
 When('I switch to the {string} section', async ({ page }, section: string) => {
-  await page.locator('[aria-label="Select section"]').click();
-  await page.getByRole('option', { name: section }).click();
+  // "Clinic", "Calls", and "Staff" are bottom-bar tabs in the mobile layout (lg:hidden).
+  // On desktop viewports the mobile tab bar is hidden and these sections are always visible,
+  // so clicking a non-existent tab would time out. Only click the tab when it is visible.
+  // "Teams", "Supervisors", "Equipment" live in the left-panel Select dropdown on desktop.
+  const bottomTabs = ['Staff', 'Calls', 'Clinic'];
+  if (bottomTabs.includes(section)) {
+    const tab = page.getByRole('tab', { name: section });
+    if (await tab.isVisible()) {
+      await tab.click();
+    }
+    // else: desktop layout — section is always visible without a tab to click
+  } else {
+    await page.locator('[aria-label="Select section"]').click();
+    await page.getByRole('option', { name: section }).click();
+  }
 });
 
 // Supervisor management
@@ -193,4 +206,19 @@ When('I delete the team {string}', async ({ page }, teamName: string) => {
 
 Then('the team {string} should not be visible', async ({ page }, teamName: string) => {
   await expect(page.getByText(teamName).first()).not.toBeVisible({ timeout: 5_000 });
+});
+
+// Supervisor deletion
+
+When('I delete the supervisor {string}', async ({ page }, callSign: string) => {
+  // Supervisors render via TeamWidget with the same data-testid pattern as teams
+  const card = page.getByTestId(`team-card-${callSign}`);
+  await card.getByRole('button', { name: 'Team actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+});
+
+// End event continue button
+
+When('I click the end event continue button', async ({ page }) => {
+  await page.getByRole('dialog').getByRole('button', { name: 'Continue' }).click();
 });

@@ -142,3 +142,31 @@ Feature: Dispatch board
   Scenario: Equipment section shows empty state when no equipment is configured
     When I switch to the "Equipment" section
     Then I should see the text "No equipment configured"
+
+  Scenario: A supervisor can be deleted from the dispatch board
+    When I switch to the "Supervisors" section
+    And I open the add supervisor modal
+    And I create a supervisor with call sign "Command-Del" and certification "CPR"
+    Then the supervisor "Command-Del" should appear in the supervisors list
+    When I delete the supervisor "Command-Del"
+    Then I should see the text "No supervisors assigned"
+
+  Scenario: End event with quick summary navigates to summary page
+    When I open the end event modal
+    And I select the "Quick summary" option
+    And I click the end event continue button
+    Then the URL should contain "/summary"
+
+  Scenario: End event with no summary navigates to venue selection
+    When I open the end event modal
+    And I select the "End with no summary" option
+    And I click the end event continue button
+    Then the URL should contain "/venues/selection"
+
+  Scenario: Multiple teams can coexist on the dispatch board
+    When I open the add team modal
+    And I create a team named "Multi-A" with a member "User A" certified as "CPR"
+    And I open the add team modal
+    And I create a team named "Multi-B" with a member "User B" certified as "EMT-B"
+    Then the team "Multi-A" should appear in the teams list
+    And the team "Multi-B" should appear in the teams list

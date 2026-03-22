@@ -75,3 +75,19 @@ Feature: Login modal
     Given I navigate to "/?login=true&error=auth"
     Then the login modal should be visible
     And I should see the modal error "Please sign in to access this page"
+
+  Scenario: Successful login closes the modal
+    When I click the "Sign In" button
+    And I fill the "Email Address" field with the test user email
+    And I fill the "Password" field with the test user password
+    And I click the "Login" submit button
+    Then the login modal should not be visible
+
+  Scenario: Successful signup closes the modal
+    When I click the "Sign In" button
+    And I click the "Sign Up" button in the modal
+    And I fill the "Email Address" field with a unique signup email
+    And I fill the "Password" field with "SecurePass123!"
+    And I fill the "Confirm Password" field with "SecurePass123!"
+    And I click the "Sign Up" submit button
+    Then the login modal should not be visible

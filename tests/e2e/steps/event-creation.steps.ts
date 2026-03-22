@@ -37,3 +37,20 @@ When('I select {string} from the {string} dropdown', async ({ page }, option: st
   await page.locator('[role="listbox"]').waitFor({ state: 'visible', timeout: 10_000 });
   await page.locator('[role="option"]', { hasText: option }).first().click();
 });
+
+// Supervisor management on the event creation page
+
+When('I click the add event supervisor button', async ({ page }) => {
+  // The icon-only Plus button has aria-label="Add Supervisor" in the Supervisors tab panel
+  await page.getByLabel('Add Supervisor').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+});
+
+When('I fill the supervisor call sign with {string}', async ({ page }, callSign: string) => {
+  await page.getByRole('dialog').getByLabel('Supervisor Call Sign').fill(callSign);
+});
+
+When('I select event supervisor certification {string}', async ({ page }, cert: string) => {
+  await page.getByRole('dialog').locator('[aria-label="Certification"]').click();
+  await page.locator('[role="listbox"]').getByText(cert, { exact: true }).click();
+});

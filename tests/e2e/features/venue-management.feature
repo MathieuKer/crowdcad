@@ -57,3 +57,22 @@ Feature: Venue management
     When I click the "Equipment" tab
     And I add equipment named "Gurney 1"
     Then I should see the text "Gurney 1"
+
+  Scenario: A location can be deleted
+    When I add a location named "Temp Location"
+    Then I should see the text "Temp Location"
+    When I delete the location "Temp Location"
+    Then I should not see the text "Temp Location"
+
+  Scenario: An equipment item can be deleted
+    When I click the "Equipment" tab
+    And I add equipment named "Temp Gurney"
+    Then I should see the text "Temp Gurney"
+    When I delete the equipment "Temp Gurney"
+    Then I should not see the text "Temp Gurney"
+
+  Scenario: Multiple locations can be added
+    When I add a location named "Location A"
+    And I add a location named "Location B"
+    Then I should see the text "Location A"
+    And I should see the text "Location B"

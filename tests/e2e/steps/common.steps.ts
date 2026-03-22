@@ -38,7 +38,7 @@ Then('the URL should be {string}', async ({ page }, url: string) => {
 });
 
 Then('the URL should contain {string}', async ({ page }, segment: string) => {
-  await page.waitForURL(new RegExp(segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), { timeout: NAV_TIMEOUT });
+  await page.waitForURL(new RegExp(segment.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)), { timeout: NAV_TIMEOUT });
 });
 
 Then('the page title should be {string}', async ({ page }, title: string) => {
@@ -79,4 +79,12 @@ Then('I should see the {string} placeholder', async ({ page }, placeholder: stri
 
 Then('I should see a link {string}', async ({ page }, name: string) => {
   await expect(page.getByRole('link', { name })).toBeVisible();
+});
+
+Then('I should not see the text {string}', async ({ page }, text: string) => {
+  await expect(page.getByText(text)).not.toBeVisible();
+});
+
+When('I fill the {string} placeholder with {string}', async ({ page }, placeholder: string, value: string) => {
+  await page.getByPlaceholder(placeholder).fill(value);
 });

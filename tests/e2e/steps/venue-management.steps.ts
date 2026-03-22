@@ -102,3 +102,17 @@ When('I add equipment named {string}', async ({ page }, name: string) => {
   await page.getByPlaceholder('e.g., Gurney 1').fill(name);
   await page.keyboard.press('Enter');
 });
+
+// Location and equipment deletion — icon-only Trash2 buttons have no aria-label,
+// so we locate the card containing the item text and click its danger-colored button.
+
+When('I delete the location {string}', async ({ page }, name: string) => {
+  // Each location is in a Card; find the row containing the text and click the last icon button (Trash2)
+  const row = page.locator('div.flex.items-center.justify-between', { hasText: name }).first();
+  await row.locator('button').last().click();
+});
+
+When('I delete the equipment {string}', async ({ page }, name: string) => {
+  const row = page.locator('div.flex.items-center.justify-between', { hasText: name }).first();
+  await row.locator('button').last().click();
+});

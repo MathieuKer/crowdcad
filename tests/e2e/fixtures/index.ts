@@ -18,13 +18,13 @@ type Fixtures = {
  */
 export const test = base.extend<Fixtures>({
   landingPage: async ({ page }, use) => {
-    await use(new LandingPage(page));
+    await use(new LandingPage(page)); // NOSONAR — `use` is a Playwright fixture callback, not a React hook
   },
   venueSelectionPage: async ({ page }, use) => {
-    await use(new VenueSelectionPage(page));
+    await use(new VenueSelectionPage(page)); // NOSONAR — `use` is a Playwright fixture callback, not a React hook
   },
   scenarioState: async ({}, use) => {
-    await use({});
+    await use({}); // NOSONAR — `use` is a Playwright fixture callback, not a React hook
   },
 });
 

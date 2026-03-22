@@ -1,6 +1,6 @@
 import { test as setup, expect } from '@playwright/test';
-import { mkdirSync } from 'fs';
-import path from 'path';
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
 
 // Path must match STORAGE_STATE in playwright.config.ts
 const authFile = path.join(__dirname, '.auth/user.json');

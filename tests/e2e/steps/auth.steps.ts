@@ -88,3 +88,22 @@ Then('I should see the modal error {string}', async ({ page }, error: string) =>
   // error element in the component to make this assertion meaningful.
   await expect(page.getByRole('dialog').getByText(error)).toBeVisible();
 });
+
+// Steps for successful login/signup using real emulator credentials
+
+When('I fill the {string} field with the test user email', async ({ page }, label: string) => {
+  const email = process.env.E2E_TEST_EMAIL;
+  if (!email) throw new Error('E2E_TEST_EMAIL not set');
+  await page.getByRole('dialog').getByLabel(label, { exact: true }).fill(email);
+});
+
+When('I fill the {string} field with the test user password', async ({ page }, label: string) => {
+  const password = process.env.E2E_TEST_PASSWORD;
+  if (!password) throw new Error('E2E_TEST_PASSWORD not set');
+  await page.getByRole('dialog').getByLabel(label, { exact: true }).fill(password);
+});
+
+When('I fill the {string} field with a unique signup email', async ({ page }, label: string) => {
+  const uniqueEmail = `e2e-signup-${Date.now()}@crowdcad.test`;
+  await page.getByRole('dialog').getByLabel(label, { exact: true }).fill(uniqueEmail);
+});

@@ -54,3 +54,27 @@ Feature: Profile page
   Scenario: Sign Out transitions the page to the not-signed-in state
     When I click the "Sign Out" button
     Then I should see the text "You are not signed in."
+
+  Scenario: Password change shows error when passwords do not match
+    When I fill the "Enter current password" placeholder with "SomePassword123!"
+    And I fill the "Enter new password" placeholder with "NewPass123!"
+    And I fill the "Confirm new password" placeholder with "DifferentPass456!"
+    And I click the "Update Password" button
+    Then I should see the text "New passwords do not match"
+
+  Scenario: Password change shows error when current password is empty
+    When I fill the "Enter new password" placeholder with "NewPass123!"
+    And I fill the "Confirm new password" placeholder with "NewPass123!"
+    And I click the "Update Password" button
+    Then I should see the text "Enter your current password"
+
+  Scenario: Delete Account button opens confirmation dialog
+    When I click the "Data & Privacy" tab
+    And I click the "Delete Account" button
+    Then I should see the text "This action cannot be undone"
+
+  Scenario: Delete Account cancel closes the dialog
+    When I click the "Data & Privacy" tab
+    And I click the "Delete Account" button
+    And I click the "Cancel" button
+    Then I should not see the text "This action cannot be undone"
