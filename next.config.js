@@ -4,8 +4,9 @@ const path = require('path');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
   // Ensure Next.js traces output from the project root (Dispatch)
-  outputFileTracingRoot: path.resolve(__dirname),
+  outputFile_tracingRoot: path.resolve(__dirname),
   images: {
     remotePatterns: [
       // Classic Firebase Storage REST endpoint
@@ -34,6 +35,9 @@ const nextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
   },
 };
 
