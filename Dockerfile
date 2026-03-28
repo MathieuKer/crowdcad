@@ -7,14 +7,16 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 RUN npm ci
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY src ./src
+COPY public ./public
+COPY components.json next.config.js tailwind.config.js postcss.config.mjs tsconfig.json eslint.config.mjs next-env.d.ts ./
 
 # Add build args using safe names to avoid SonarCloud secret warnings
 ARG FB_API
