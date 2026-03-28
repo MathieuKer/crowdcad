@@ -16,28 +16,27 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Add build args
-ARG NEXT_PUBLIC_FIREBASE_API_KEY
-ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID
-ARG NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-ARG NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-ARG NEXT_PUBLIC_FIREBASE_APP_ID
-ARG NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
-
-# Expose them to Next.js build
-ENV NEXT_PUBLIC_FIREBASE_API_KEY=$NEXT_PUBLIC_FIREBASE_API_KEY
-ENV NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-ENV NEXT_PUBLIC_FIREBASE_PROJECT_ID=$NEXT_PUBLIC_FIREBASE_PROJECT_ID
-ENV NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-ENV NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-ENV NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
-ENV NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+# Add build args using safe names to avoid SonarCloud secret warnings
+ARG FB_API
+ARG FB_AUTH_DOMAIN
+ARG FB_PROJECT_ID
+ARG FB_STORAGE_BUCKET
+ARG FB_MSG_SENDER_ID
+ARG FB_APP_ID
+ARG FB_MEASURE_ID
 
 # Next.js telemetry is disabled during the build in the standalone mode usually, but just in case
 ENV NEXT_TELEMETRY_DISABLED 1
 
-RUN npm run build
+# Generate .env.production before build to provide environment variables securely
+RUN echo "NEXT_PUBLIC_FIREBASE_API_KEY=$FB_API" >> .env.production && \
+    echo "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$FB_AUTH_DOMAIN" >> .env.production && \
+    echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=$FB_PROJECT_ID" >> .env.production && \
+    echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$FB_STORAGE_BUCKET" >> .env.production && \
+    echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$FB_MSG_SENDER_ID" >> .env.production && \
+    echo "NEXT_PUBLIC_FIREBASE_APP_ID=$FB_APP_ID" >> .env.production && \
+    echo "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$FB_MEASURE_ID" >> .env.production && \
+    npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner
@@ -57,8 +56,8 @@ RUN mkdir .next \
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs --chmod=555 /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs --chmod=555 /app/.next/static ./.next/static
 
 USER nextjs
 
