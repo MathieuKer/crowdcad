@@ -6,7 +6,7 @@ const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   // Ensure Next.js traces output from the project root (Dispatch)
-  outputFile_tracingRoot: path.resolve(__dirname),
+  outputFileTracingRoot: path.resolve(__dirname),
   images: {
     remotePatterns: [
       // Classic Firebase Storage REST endpoint
