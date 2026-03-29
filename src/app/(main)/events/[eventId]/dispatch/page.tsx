@@ -3948,7 +3948,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
       <EndEventModal
         open={showEndEvent}
         onClose={() => setShowEndEvent(false)}
-        onEndNoSummary={async () => {}}
+        onEndNoSummary={async () => { router.push('/venues/selection'); }}
         onQuickSummary={async () => router.push(`/events/${event.id}/summary`)}
       />
 

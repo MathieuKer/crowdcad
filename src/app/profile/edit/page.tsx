@@ -38,7 +38,7 @@ export default function EditProfilePage() {
       if (auth.currentUser) {
         await updateProfile(auth.currentUser, {
           displayName: displayName || null,
-          photoURL: photoURL || null,
+          ...(photoURL ? { photoURL } : {}),
         });
 
         // Save phone (and other profile metadata) to Firestore users collection
