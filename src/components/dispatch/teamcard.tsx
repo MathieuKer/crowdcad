@@ -137,6 +137,7 @@ export default function TeamCard({
     <Card
       // No outside border; unified bg for header + body
       className={`rounded-2xl shadow-sm border-0 ${bg}`}
+      data-testid={`team-card-${staff.team}`}
     >
       {/* HEADER (click to toggle). Not a <button>, so no nested <button> issues */}
       <CardHeader

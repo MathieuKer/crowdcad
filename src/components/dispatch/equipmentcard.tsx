@@ -94,6 +94,7 @@ export default function EquipmentCard({
   return (
     <Card
       className={`rounded-2xl shadow-sm border-0 ${bg}`}
+      data-testid={`equipment-card-${equipment.name}`}
     >
       <div
         onClick={() => setExpanded(v => !v)}
