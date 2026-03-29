@@ -8,8 +8,7 @@ import ClinicWalkupModal from "@/components/dispatch/clinicwalkupmodal";
 import AddTeamModal from "@/components/modals/event/addteammodal";
 import AddSupervisorModal from "@/components/modals/event/addsupervisormodal";
 import React from 'react';
-import { doc, onSnapshot, runTransaction } from 'firebase/firestore';
-import { db } from '@/app/firebase';
+import { dbService, ServiceError } from '@/lib/services';
 import { PostAssignment, Event, Staff, Supervisor, Call, EquipmentStatus, CallLogEntry, TeamLogEntry, EquipmentItem, EventEquipment, ClinicOutcome } from '@/app/types';
 import { toast, Slide } from 'react-toastify';
 import { useRouter } from 'next/navigation';
@@ -235,13 +234,12 @@ export default function DispatchPage({ params }: DispatchPageProps) {
   ) => {
     if (!eventId) return;
     try {
-      await runTransaction(db, async (transaction) => {
-        const eventRef = doc(db, "events", eventId);
-        const eventDoc = await transaction.get(eventRef);
-        if (!eventDoc.exists()) throw new Error("Event does not exist");
+      await dbService.runTransaction(async (tx) => {
+        const snap = await tx.get<Event>('events', eventId);
+        if (!snap.exists || !snap.data) throw new Error("Event does not exist");
 
-        const currentEvent = eventDoc.data() as Event;
-        
+        const currentEvent = snap.data;
+
         let updates: Partial<Event>;
         if (typeof updateInput === 'function') {
           updates = updateInput(currentEvent);
@@ -267,7 +265,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
           return cleaned as unknown as T;
         };
 
-        transaction.update(eventRef, removeUndefined(updates));
+        tx.update('events', eventId, removeUndefined(updates));
       });
     } catch (error) {
       console.error("Update failed:", error);
@@ -1601,52 +1599,57 @@ export default function DispatchPage({ params }: DispatchPageProps) {
       return;
     }
     
-    const unsubscribe = onSnapshot(doc(db, 'events', eventId), (doc) => {
-      if (doc.exists()) {
-        const eventData = doc.data() as Event;
-        // Debug: log event document contents to diagnose missing postingTimes
-        // eslint-disable-next-line no-console
-        console.log('Firestore snapshot - eventData:', {
-          id: doc.id,
-          postingTimes: eventData.postingTimes,
-          postAssignments: eventData.postAssignments,
-          eventDataSample: {
-            id: eventData.id,
-            name: eventData.name,
-            date: eventData.date,
-            eventPostsLength: (eventData.eventPosts || []).length,
-            staffLength: (eventData.staff || []).length,
+    const unsubscribe = dbService.subscribeToDocument<Event>(
+      'events',
+      eventId,
+      (snap) => {
+        if (snap.exists && snap.data) {
+          const eventData = snap.data;
+          // Debug: log event document contents to diagnose missing postingTimes
+          // eslint-disable-next-line no-console
+          console.log('Snapshot - eventData:', {
+            id: snap.id,
+            postingTimes: eventData.postingTimes,
+            postAssignments: eventData.postAssignments,
+            eventDataSample: {
+              id: eventData.id,
+              name: eventData.name,
+              date: eventData.date,
+              eventPostsLength: (eventData.eventPosts || []).length,
+              staffLength: (eventData.staff || []).length,
+            }
+          });
+
+          const userEmail = user.email?.toLowerCase();
+          const isSharedUser = eventData.sharedWith?.some(email => email.toLowerCase() === userEmail);
+
+          if (eventData.userId && eventData.userId !== user.uid && !isAdmin && !isSharedUser) {
+            console.error('Unauthorized access to event');
+            sessionStorage.setItem('redirectPath', `/events/${eventId}/dispatch`);
+            router.push('/?login=true&error=unauthorized');
+            return;
           }
-        });
-
-        const userEmail = user.email?.toLowerCase();
-        const isSharedUser = eventData.sharedWith?.some(email => email.toLowerCase() === userEmail);
-
-        if (eventData.userId && eventData.userId !== user.uid && !isAdmin && !isSharedUser) {
-          console.error('Unauthorized access to event');
+          setEvent(prev => {
+            if (!isEqual(prev, eventData)) {
+              setPostAssignments(eventData.postAssignments || {});
+              return eventData;
+            }
+            return prev;
+          });
+        } else {
+          setEvent(undefined);
+          router.push('/venues/selection');
+        }
+      },
+      (error) => {
+        console.error('Error fetching event:', error);
+        // Handle permission errors
+        if (error instanceof ServiceError && error.code === 'permission-denied') {
           sessionStorage.setItem('redirectPath', `/events/${eventId}/dispatch`);
           router.push('/?login=true&error=unauthorized');
-          return;
         }
-        setEvent(prev => {
-          if (!isEqual(prev, eventData)) {
-            setPostAssignments(eventData.postAssignments || {});
-            return eventData;
-          }
-          return prev;
-        });
-      } else {
-        setEvent(undefined);
-        router.push('/venues/selection');
-      }
-    }, (error) => {
-      console.error('Error fetching event:', error);
-      // Handle permission errors
-      if (error.code === 'permission-denied') {
-        sessionStorage.setItem('redirectPath', `/events/${eventId}/dispatch`);
-        router.push('/?login=true&error=unauthorized');
-      }
-    });
+      },
+    );
     
     return () => unsubscribe();
   }, [eventId, user, router, isAdmin]);

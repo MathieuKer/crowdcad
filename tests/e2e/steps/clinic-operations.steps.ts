@@ -10,11 +10,14 @@ const { When } = createBdd(test);
  * requested outcome from the dropdown menu.
  */
 When('I set the clinic outcome for the latest call to {string}', async ({ page }, outcome: string) => {
-  // The clinic tracking table status trigger has exactly "In Clinic" as its accessible name.
-  // The team-card status button in the left panel has "In Clinic Status Status" (substring),
-  // so we must use exact: true to avoid matching it first.
+  // The clinic tracking table (desktop) renders a Button whose only text content is
+  // "In Clinic" (no aria-label), so exact: true matches it without also matching the
+  // team-card status button (which renders "Status\nIn Cl…" via two nested divs).
   const statusButton = page.getByRole('button', { name: 'In Clinic', exact: true }).first();
   await statusButton.click();
   // Select the outcome from the dropdown
   await page.getByRole('menuitem', { name: outcome }).click();
+  // After setting an outcome the call moves to the resolved section (hidden by default).
+  // Toggle "Show Resolved Clinic Calls" so the outcome text becomes visible.
+  await page.getByLabel('Toggle resolved clinic calls').first().click();
 });

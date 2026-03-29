@@ -1,11 +1,9 @@
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
-import { db } from '@/app/firebase';
-import { doc, getDoc, updateDoc, deleteDoc, collection, addDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import { Event, Venue, Staff, Supervisor, Post, Equipment, EventEquipment } from '@/app/types';
-import { getAuth } from 'firebase/auth';
+import { authService, dbService } from '@/lib/services';
 import Image from 'next/image';
 import { Tabs, Tab, Input, DatePicker, Select, SelectItem, Checkbox, Button, Card, ScrollShadow, Chip, TimeInput } from '@heroui/react';
 import { parseDate, getLocalTimeZone, today, Time } from '@internationalized/date';
@@ -147,8 +145,7 @@ export default function EventCreation() {
     const times = eventData.postingTimes || [];
     const timeout = setTimeout(async () => {
       try {
-        const docRef = doc(db, 'events', eventId);
-        await updateDoc(docRef, stripUndefined({ postingTimes: times }));
+        await dbService.updateDocument('events', eventId, stripUndefined({ postingTimes: times }) as Record<string, unknown>);
         // eslint-disable-next-line no-console
         console.log('Autosaved postingTimes to draft:', { eventId, postingTimes: times });
       } catch (err) {
@@ -167,12 +164,10 @@ export default function EventCreation() {
           
       const fetchEvent = async () => {
         try {
-          const docRef = doc(db, 'events', eventId);
-          const docSnap = await getDoc(docRef);
-          
-          
-          if (docSnap.exists()) {
-            const data = docSnap.data() as Event;
+          const docSnap = await dbService.getDocument<Event>('events', eventId);
+
+          if (docSnap.exists && docSnap.data) {
+            const data = docSnap.data;
             
             
             let dateString = '';
@@ -230,8 +225,7 @@ export default function EventCreation() {
     } else {
         const createDraft = async () => {
         setLoading(true);
-        const auth = getAuth();
-        const user = auth.currentUser;
+        const user = authService.currentUser;
         if (!user) {
           setLoading(false);
           return;
@@ -269,9 +263,9 @@ export default function EventCreation() {
             createdAt: new Date().toISOString(),
             status: 'draft',
           };
-        const docRef = await addDoc(collection(db, 'events'), stripUndefined(draft));
+        const newId = await dbService.addDocument('events', stripUndefined(draft));
         setEventData(prev => ({ ...prev, userId: user.uid }));
-        router.replace(`/events/${docRef.id}/create`);
+        router.replace(`/events/${newId}/create`);
         setLoading(false);
       };
       createDraft();
@@ -362,8 +356,7 @@ export default function EventCreation() {
   const handleSubmit = async () => {
     submittedRef.current = true;
     try {
-      const auth = getAuth();
-      const user = auth.currentUser;
+      const user = authService.currentUser;
       if (!user) {
         alert('You must be logged in to create an event.');
         return;
@@ -408,21 +401,20 @@ export default function EventCreation() {
       let eventDocId = eventId;
       if (eventDocId) {
         try {
-          const docRef = doc(db, 'events', eventDocId);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            await updateDoc(docRef, stripUndefined({
+          const docSnap2 = await dbService.getDocument('events', eventDocId);
+          if (docSnap2.exists) {
+            await dbService.updateDocument('events', eventDocId, stripUndefined({
               ...eventData,
               postingTimes: computedTimes.length > 0 ? computedTimes : eventData.postingTimes,
               userId: user.uid,
               date: dateValue.toISOString(),
               updatedAt: new Date().toISOString(),
               status: 'active',
-            }));
+            }) as Record<string, unknown>);
             // eslint-disable-next-line no-console
             console.log('Event updated:', { eventId: eventDocId, postingTimes: eventData.postingTimes || [] });
           } else {
-            const newDocRef = await addDoc(collection(db, 'events'), stripUndefined({
+            eventDocId = await dbService.addDocument('events', stripUndefined({
               ...eventData,
               postingTimes: computedTimes.length > 0 ? computedTimes : eventData.postingTimes,
               userId: user.uid,
@@ -430,32 +422,29 @@ export default function EventCreation() {
               createdAt: new Date().toISOString(),
               status: 'active',
             }));
-            eventDocId = newDocRef.id;
             // eslint-disable-next-line no-console
             console.log('Event created (branch new):', { eventId: eventDocId, postingTimes: eventData.postingTimes || [] });
           }
         } catch (error) {
           console.error('Error checking/updating document:', error);
-          const newDocRef = await addDoc(collection(db, 'events'), stripUndefined({
+          eventDocId = await dbService.addDocument('events', stripUndefined({
             ...eventData,
             userId: user.uid,
             date: dateValue.toISOString(),
             createdAt: new Date().toISOString(),
             status: 'active',
           }));
-          eventDocId = newDocRef.id;
           // eslint-disable-next-line no-console
           console.log('Event created (catch):', { eventId: eventDocId, postingTimes: eventData.postingTimes || [] });
         }
       } else {
-        const docRef = await addDoc(collection(db, 'events'), stripUndefined({
+        eventDocId = await dbService.addDocument('events', stripUndefined({
           ...eventData,
           userId: user.uid,
           date: dateValue.toISOString(),
           createdAt: new Date().toISOString(),
           status: 'active',
         }));
-        eventDocId = docRef.id;
         // eslint-disable-next-line no-console
         console.log('Event created (no eventId):', { eventId: eventDocId, postingTimes: eventData.postingTimes || [] });
       }

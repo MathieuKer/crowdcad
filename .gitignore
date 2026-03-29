@@ -49,6 +49,9 @@ Thumbs.db
 
 # Playwright
 /tests/e2e/.auth/
+/tests/e2e/.pb-data/
 /playwright-report/
+/playwright-report-pocketbase/
 /test-results/
 /.features-gen/
+/.features-gen-pocketbase/

@@ -19,16 +19,25 @@ Given('I have a venue on the selection page', async ({ page, scenarioState }) =>
 });
 
 When('I open the venue actions menu', async ({ page, scenarioState }) => {
-  // On desktop, the venue card shows an ellipsis button with aria-label "Venue actions".
-  // We need to find the one associated with our venue. The venue name appears in the same
-  // row/card as the actions button.
-  const venueRow = page.locator('div', { hasText: scenarioState.deletionVenueName })
-    .filter({ has: page.locator('[aria-label="Venue actions"]') })
-    .last();
-  await venueRow.locator('[aria-label="Venue actions"]').click();
+  // Find the h3 heading for our venue, then XPath up to the nearest ancestor div
+  // that contains the "Venue actions" button and click it. This avoids selecting
+  // outer container divs that contain all buttons (strict-mode violation).
+  const heading = page.getByRole('heading', { name: scenarioState.deletionVenueName, level: 3 });
+  await heading
+    .locator('xpath=ancestor::div[.//button[@aria-label="Venue actions"]][1]//button[@aria-label="Venue actions"]')
+    .click();
 });
 
-When('I confirm venue deletion', async ({ page }) => {
+When('I confirm venue deletion', async ({ page, scenarioState }) => {
+  // A PocketBase realtime subscription update from a parallel test can close the dropdown
+  // mid-animation between the "open menu" step and this one. The Delete menuitem may be
+  // briefly "visible" but unstable (animating out) when Playwright tries to click it.
+  // Fix: press Escape to flush any open/closing dropdown, then re-open fresh.
+  await page.keyboard.press('Escape');
+  const heading = page.getByRole('heading', { name: scenarioState.deletionVenueName, level: 3 });
+  await heading
+    .locator('xpath=ancestor::div[.//button[@aria-label="Venue actions"]][1]//button[@aria-label="Venue actions"]')
+    .click();
   // Register a dialog handler to accept the window.confirm before clicking Delete
   page.once('dialog', dialog => dialog.accept());
   // force:true bypasses Playwright's stability/scroll checks that cause the
@@ -36,7 +45,13 @@ When('I confirm venue deletion', async ({ page }) => {
   await page.getByRole('menuitem', { name: 'Delete' }).click({ force: true });
 });
 
-When('I cancel venue deletion', async ({ page }) => {
+When('I cancel venue deletion', async ({ page, scenarioState }) => {
+  // Same race condition as above — press Escape to flush, then re-open fresh.
+  await page.keyboard.press('Escape');
+  const heading = page.getByRole('heading', { name: scenarioState.deletionVenueName, level: 3 });
+  await heading
+    .locator('xpath=ancestor::div[.//button[@aria-label="Venue actions"]][1]//button[@aria-label="Venue actions"]')
+    .click();
   // Register a dialog handler to dismiss the window.confirm
   page.once('dialog', dialog => dialog.dismiss());
   await page.getByRole('menuitem', { name: 'Delete' }).click({ force: true });

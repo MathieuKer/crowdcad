@@ -6,15 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useauth';
-import { db } from '@/app/firebase';
-import { addDoc, collection, doc, getDoc, updateDoc } from 'firebase/firestore';
-import {
-  getStorage,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  type StorageReference,
-} from 'firebase/storage';
+import { dbService, storageService } from '@/lib/services';
 import type { Post, Venue, Equipment, EquipmentStatus, Layer } from '@/app/types';
 import { DiagonalStreaksFixed } from "@/components/ui/diagonal-streaks-fixed";
 import NewLayerModal from '@/components/modals/venue/newlayer';
@@ -59,7 +51,7 @@ export default function VenueManagementPageClient() {
   // Firebase
   const { user } = useAuth();
   const userId = user?.uid;
-  const storage = useMemo(() => getStorage(), []);
+
 
   // Local state
   const [venueData, setVenueData] = useState<{
@@ -162,9 +154,9 @@ export default function VenueManagementPageClient() {
     if (venueId && userId) {
       const loadVenue = async () => {
         try {
-          const venueDoc = await getDoc(doc(db, 'venues', venueId));
-          if (venueDoc.exists()) {
-            const venue = venueDoc.data() as Venue & { layers?: Layer[] };
+          const venueDoc = await dbService.getDocument<Venue & { layers?: Layer[] }>('venues', venueId);
+          if (venueDoc.exists && venueDoc.data) {
+            const venue = venueDoc.data;
             let layers: Layer[];
             if (venue.layers && venue.layers.length > 0) {
               layers = venue.layers;
@@ -582,42 +574,6 @@ export default function VenueManagementPageClient() {
       });
   };
 
-  // Upload w/ retry
-  const uploadWithRetry = async (
-    storageRef: StorageReference,
-    file: File,
-    maxRetries = 3,
-    baseDelay = 1200
-  ): Promise<string> => {
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        await uploadBytes(storageRef, file);
-        return await getDownloadURL(storageRef);
-      } catch (err: unknown) {
-        const code =
-          typeof err === 'object' && err !== null && 'code' in err
-            ? (err as { code?: unknown }).code
-            : undefined;
-
-        const isRetryable =
-          code === 'storage/retry-limit-exceeded' ||
-          code === 'storage/unknown' ||
-          code === 'storage/canceled' ||
-          code === 'storage/quota-exceeded' ||
-          code === 'storage/unauthenticated';
-
-        if (attempt < maxRetries - 1 && isRetryable) {
-          const wait = baseDelay * Math.pow(2, attempt);
-          await new Promise((res) => setTimeout(res, wait));
-          continue;
-        }
-
-        throw new Error('Upload failed');
-      }
-    }
-    throw new Error('Max retries exceeded');
-  };
-
   // Create venue
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -642,8 +598,7 @@ export default function VenueManagementPageClient() {
       let newMapUrl: string | undefined;
 
       if (mapFile && mapFile.size > 0) {
-        const storageRef = ref(storage, `venue_maps/${Date.now()}_${mapFile.name}`);
-        newMapUrl = await uploadWithRetry(storageRef, mapFile);
+        newMapUrl = await storageService.uploadFile(`venue_maps/${Date.now()}_${mapFile.name}`, mapFile);
       }
 
       const equipmentToSave = venueData.equipment.map(({ ...rest }) => rest);
@@ -675,13 +630,9 @@ export default function VenueManagementPageClient() {
       }
 
       if (venueId) {
-        // Update existing venue
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await updateDoc(doc(db, 'venues', venueId), dataToSave as any);
+        await dbService.updateDocument('venues', venueId, dataToSave);
       } else {
-        // Create new venue
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await addDoc(collection(db, 'venues'), dataToSave as any);
+        await dbService.addDocument('venues', dataToSave);
       }
       router.push('/venues/selection')
     } catch (error: unknown) {
@@ -709,8 +660,7 @@ export default function VenueManagementPageClient() {
   const handleAddLayer = async (name: string, file: File) => {
     setIsUploading(true);
     try {
-      const storageRef = ref(storage, `venue_maps/${Date.now()}_${file.name}`);
-      const mapUrl = await uploadWithRetry(storageRef, file);
+      const mapUrl = await storageService.uploadFile(`venue_maps/${Date.now()}_${file.name}`, file);
       const newLayer: Layer = {
         id: crypto.randomUUID(),
         name,
