@@ -14,21 +14,11 @@ import {
   arrayUnion as firebaseArrayUnion,
   arrayRemove as firebaseArrayRemove,
 } from 'firebase/firestore';
-import { FirebaseError } from 'firebase/app';
 import { db } from '@/app/firebase';
 import type { IDbService } from '../IDbService';
 import type { DocSnapshot, QueryConstraint, TransactionContext, Unsubscribe } from '../types';
-import { isArrayUnion, isArrayRemove, ServiceError } from '../types';
-
-function toServiceError(err: unknown): ServiceError {
-  if (err instanceof FirebaseError) {
-    return new ServiceError(err.code, err.message);
-  }
-  if (err instanceof Error) {
-    return new ServiceError('unknown', err.message);
-  }
-  return new ServiceError('unknown', String(err));
-}
+import { isArrayUnion, isArrayRemove } from '../types';
+import { toFirebaseServiceError as toServiceError } from './utils';
 
 /** Translate FieldValue sentinels to Firebase SDK values. Recurses into plain objects. */
 function resolveFieldValues(data: Record<string, unknown>): Record<string, unknown> {

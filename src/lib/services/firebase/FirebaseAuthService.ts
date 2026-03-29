@@ -10,11 +10,11 @@ import {
   deleteUser,
   type User,
 } from 'firebase/auth';
-import { FirebaseError } from 'firebase/app';
 import { auth } from '@/app/firebase';
 import type { IAuthService } from '../IAuthService';
 import type { ServiceUser, Unsubscribe } from '../types';
 import { ServiceError } from '../types';
+import { toFirebaseServiceError as toServiceError } from './utils';
 
 function toServiceUser(user: User): ServiceUser {
   return {
@@ -24,16 +24,6 @@ function toServiceUser(user: User): ServiceUser {
     photoURL: user.photoURL,
     phoneNumber: user.phoneNumber,
   };
-}
-
-function toServiceError(err: unknown): ServiceError {
-  if (err instanceof FirebaseError) {
-    return new ServiceError(err.code, err.message);
-  }
-  if (err instanceof Error) {
-    return new ServiceError('unknown', err.message);
-  }
-  return new ServiceError('unknown', String(err));
 }
 
 export class FirebaseAuthService implements IAuthService {

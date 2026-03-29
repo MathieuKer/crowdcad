@@ -2,6 +2,7 @@ import { pb } from './client';
 import type { IAuthService } from '../IAuthService';
 import type { ServiceUser, Unsubscribe } from '../types';
 import { ServiceError } from '../types';
+import { toPbAuthError as toServiceError } from './utils';
 
 function toServiceUser(model: Record<string, unknown>): ServiceUser {
   return {
@@ -15,22 +16,6 @@ function toServiceUser(model: Record<string, unknown>): ServiceUser {
   };
 }
 
-function toServiceError(err: unknown): ServiceError {
-  if (err && typeof err === 'object' && 'status' in err) {
-    const pbErr = err as { status: number; message: string; data?: Record<string, unknown> };
-    const code =
-      pbErr.status === 400 ? 'auth/invalid-credential' :
-      pbErr.status === 401 ? 'auth/wrong-password' :
-      pbErr.status === 403 ? 'auth/user-disabled' :
-      pbErr.status === 404 ? 'auth/user-not-found' :
-      `pocketbase/${pbErr.status}`;
-    return new ServiceError(code, pbErr.message);
-  }
-  if (err instanceof Error) {
-    return new ServiceError('unknown', err.message);
-  }
-  return new ServiceError('unknown', String(err));
-}
 
 export class PocketbaseAuthService implements IAuthService {
   get currentUser(): ServiceUser | null {

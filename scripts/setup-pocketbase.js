@@ -147,8 +147,7 @@ async function main() {
 
   await ensureCollection(headers, '_storage', [
     { name: 'path', type: 'text', required: true },
-    { name: 'url', type: 'text' },
-    { name: 'contentType', type: 'text' },
+    { name: 'file', type: 'file', options: { maxSelect: 1, maxSize: 52428800 } },
   ]);
 
   console.log('\nDone. CrowdCAD collections are ready.');

@@ -7,7 +7,7 @@ const PB_URL = 'http://127.0.0.1:8090';
 const ADMIN_EMAIL = process.env.PB_E2E_ADMIN_EMAIL ?? 'admin@pbtest.local';
 const ADMIN_PASSWORD = process.env.PB_E2E_ADMIN_PASSWORD ?? 'Admin1234567890!';
 
-type FieldDef = { name: string; type: string; required?: boolean };
+type FieldDef = { name: string; type: string; required?: boolean; options?: Record<string, unknown> };
 type AdminHeaders = { 'Content-Type': string; Authorization: string };
 
 async function pbFetch(apiPath: string, options: RequestInit = {}) {
@@ -121,44 +121,42 @@ async function globalSetup(): Promise<void> {
     Authorization: `Bearer ${token}`,
   };
 
-  // Ensure all required collections exist
-  await ensureBaseCollection(headers, 'venues', [
-    { name: 'name', type: 'text', required: true },
-    { name: 'userId', type: 'text' },
-    { name: 'equipment', type: 'json' },
-    { name: 'layers', type: 'json' },
-    { name: 'posts', type: 'json' },
-    { name: 'mapUrl', type: 'text' },
-    { name: 'sharedWith', type: 'json' },
-  ]);
-
-  await ensureBaseCollection(headers, 'events', [
-    { name: 'name', type: 'text' },
-    { name: 'date', type: 'text' },
-    { name: 'userId', type: 'text' },
-    { name: 'venue', type: 'json' },
-    { name: 'sharedWith', type: 'json' },
-    { name: 'postingTimes', type: 'json' },
-    { name: 'staff', type: 'json' },
-    { name: 'supervisor', type: 'json' },
-    { name: 'calls', type: 'json' },
-    { name: 'status', type: 'text' },
-    { name: 'eventPosts', type: 'json' },
-    { name: 'eventEquipment', type: 'json' },
-    { name: 'pendingAssignments', type: 'json' },
-    { name: 'postAssignments', type: 'json' },
-    { name: 'interactionSessions', type: 'json' },
-  ]);
-
-  await ensureBaseCollection(headers, '_storage', [
-    { name: 'path', type: 'text', required: true },
-    { name: 'url', type: 'text' },
-    { name: 'contentType', type: 'text' },
-  ]);
-
-  await ensureBaseCollection(headers, 'dispatchLogs', [
-    { name: 'eventId', type: 'text' },
-    { name: 'data', type: 'json' },
+  // Ensure all required collections exist (run in parallel — each is independent)
+  await Promise.all([
+    ensureBaseCollection(headers, 'venues', [
+      { name: 'name', type: 'text', required: true },
+      { name: 'userId', type: 'text' },
+      { name: 'equipment', type: 'json' },
+      { name: 'layers', type: 'json' },
+      { name: 'posts', type: 'json' },
+      { name: 'mapUrl', type: 'text' },
+      { name: 'sharedWith', type: 'json' },
+    ]),
+    ensureBaseCollection(headers, 'events', [
+      { name: 'name', type: 'text' },
+      { name: 'date', type: 'text' },
+      { name: 'userId', type: 'text' },
+      { name: 'venue', type: 'json' },
+      { name: 'sharedWith', type: 'json' },
+      { name: 'postingTimes', type: 'json' },
+      { name: 'staff', type: 'json' },
+      { name: 'supervisor', type: 'json' },
+      { name: 'calls', type: 'json' },
+      { name: 'status', type: 'text' },
+      { name: 'eventPosts', type: 'json' },
+      { name: 'eventEquipment', type: 'json' },
+      { name: 'pendingAssignments', type: 'json' },
+      { name: 'postAssignments', type: 'json' },
+      { name: 'interactionSessions', type: 'json' },
+    ]),
+    ensureBaseCollection(headers, '_storage', [
+      { name: 'path', type: 'text', required: true },
+      { name: 'file', type: 'file', options: { maxSelect: 1, maxSize: 52428800 } },
+    ]),
+    ensureBaseCollection(headers, 'dispatchLogs', [
+      { name: 'eventId', type: 'text' },
+      { name: 'data', type: 'json' },
+    ]),
   ]);
 
   // Wipe all data collections to ensure a clean state for every test run

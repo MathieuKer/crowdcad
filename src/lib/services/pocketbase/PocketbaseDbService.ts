@@ -2,20 +2,7 @@ import { pb } from './client';
 import type { IDbService } from '../IDbService';
 import type { DocSnapshot, QueryConstraint, TransactionContext, Unsubscribe } from '../types';
 import { isArrayUnion, isArrayRemove, ServiceError } from '../types';
-
-function toServiceError(err: unknown): ServiceError {
-  if (err && typeof err === 'object' && 'status' in err) {
-    const pbErr = err as { status: number; message: string };
-    const code =
-      pbErr.status === 404 ? 'not-found' :
-      pbErr.status === 403 ? 'permission-denied' :
-      pbErr.status === 401 ? 'unauthenticated' :
-      `pocketbase/${pbErr.status}`;
-    return new ServiceError(code, pbErr.message);
-  }
-  if (err instanceof Error) return new ServiceError('unknown', err.message);
-  return new ServiceError('unknown', String(err));
-}
+import { toPbServiceError } from './utils';
 
 function toSnapshot<T>(record: Record<string, unknown>): DocSnapshot<T> {
   return { id: record.id as string, exists: true, data: record as T };
@@ -41,7 +28,7 @@ export class PocketbaseDbService implements IDbService {
       const record = await pb.collection(col).getOne(id);
       return toSnapshot<T>(record as unknown as Record<string, unknown>);
     } catch (err) {
-      const sErr = toServiceError(err);
+      const sErr = toPbServiceError(err);
       if (sErr.code === 'not-found') {
         return { id, exists: false, data: null };
       }
@@ -54,7 +41,7 @@ export class PocketbaseDbService implements IDbService {
       const records = await pb.collection(col).getFullList();
       return records.map((r) => toSnapshot<T>(r as unknown as Record<string, unknown>));
     } catch (err) {
-      throw toServiceError(err);
+      throw toPbServiceError(err);
     }
   }
 
@@ -64,7 +51,7 @@ export class PocketbaseDbService implements IDbService {
       const records = await pb.collection(col).getFullList({ filter: filter || undefined });
       return records.map((r) => toSnapshot<T>(r as unknown as Record<string, unknown>));
     } catch (err) {
-      throw toServiceError(err);
+      throw toPbServiceError(err);
     }
   }
 
@@ -73,7 +60,7 @@ export class PocketbaseDbService implements IDbService {
       const record = await pb.collection(col).create(data as Record<string, unknown>);
       return (record as unknown as Record<string, unknown>).id as string;
     } catch (err) {
-      throw toServiceError(err);
+      throw toPbServiceError(err);
     }
   }
 
@@ -84,34 +71,29 @@ export class PocketbaseDbService implements IDbService {
     _options?: { merge?: boolean },
   ): Promise<void> {
     try {
+      await pb.collection(col).update(id, data as Record<string, unknown>);
+    } catch (updateErr) {
+      const sErr = toPbServiceError(updateErr);
+      if (sErr.code !== 'not-found') throw sErr;
       try {
-        await pb.collection(col).update(id, data as Record<string, unknown>);
-      } catch (err) {
-        const sErr = toServiceError(err);
-        if (sErr.code === 'not-found') {
-          await pb.collection(col).create({ id, ...(data as Record<string, unknown>) });
-        } else {
-          throw sErr;
-        }
+        await pb.collection(col).create({ id, ...(data as Record<string, unknown>) });
+      } catch (createErr) {
+        throw toPbServiceError(createErr);
       }
-    } catch (err) {
-      if (err instanceof ServiceError) throw err;
-      throw toServiceError(err);
     }
   }
 
   async updateDocument(col: string, id: string, data: Record<string, unknown>): Promise<void> {
-    // Detect if any FieldValue sentinels need a read-modify-write
     const hasArrayOps = Object.values(data).some(
       (v) => isArrayUnion(v) || isArrayRemove(v),
     );
 
+    let resolved = data;
+
     if (hasArrayOps) {
-      // Read current document, apply array operations, then write
       const snap = await this.getDocument<Record<string, unknown>>(col, id);
       const current = snap.data ?? {};
-      const resolved: Record<string, unknown> = {};
-
+      resolved = {};
       for (const [key, value] of Object.entries(data)) {
         if (isArrayUnion(value)) {
           const existing = Array.isArray(current[key]) ? (current[key] as unknown[]) : [];
@@ -128,18 +110,12 @@ export class PocketbaseDbService implements IDbService {
           resolved[key] = value;
         }
       }
+    }
 
-      try {
-        await pb.collection(col).update(id, resolved);
-      } catch (err) {
-        throw toServiceError(err);
-      }
-    } else {
-      try {
-        await pb.collection(col).update(id, data);
-      } catch (err) {
-        throw toServiceError(err);
-      }
+    try {
+      await pb.collection(col).update(id, resolved);
+    } catch (err) {
+      throw toPbServiceError(err);
     }
   }
 
@@ -147,7 +123,7 @@ export class PocketbaseDbService implements IDbService {
     try {
       await pb.collection(col).delete(id);
     } catch (err) {
-      throw toServiceError(err);
+      throw toPbServiceError(err);
     }
   }
 
@@ -213,7 +189,7 @@ export class PocketbaseDbService implements IDbService {
       } else {
         callback(toSnapshot<T>(event.record as unknown as Record<string, unknown>));
       }
-    }).catch((err) => onError?.(toServiceError(err)));
+    }).catch((err) => onError?.(toPbServiceError(err)));
 
     return () => {
       cancelled = true;
@@ -237,14 +213,14 @@ export class PocketbaseDbService implements IDbService {
           if (!cancelled)
             callback(records.map((r) => toSnapshot<T>(r as unknown as Record<string, unknown>)));
         })
-        .catch((err) => { if (!cancelled) onError?.(toServiceError(err)); });
+        .catch((err) => { if (!cancelled) onError?.(toPbServiceError(err)); });
 
     // Initial load
     refetch();
 
     // Re-fetch on any change in the collection
     pb.collection(col).subscribe('*', () => { if (!cancelled) refetch(); })
-      .catch((err) => onError?.(toServiceError(err)));
+      .catch((err) => onError?.(toPbServiceError(err)));
 
     return () => {
       cancelled = true;
