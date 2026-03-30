@@ -1,0 +1,45 @@
+name: Deploy on Realease
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate semver tag
+        run: |
+          if [[ "${{ github.event.release.tag_name }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)? ]]; then
+          echo "Valid semver tag: ${{ github.event.release.tag_name }}"
+          else
+          echo "❌ '${{ github.event.release.tag_name }}' is not a valid semver tag"
+          exit 1
+          fi
+
+  build:
+    needs: check
+    uses: ./.github/workflows/build.yml
+    with:
+      sha: ${{ github.sha }}
+      build: true
+    secrets: inherit
+
+  deploy-netlify:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    if: needs.build.result == 'success'
+    steps:        
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        id: download
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+          path: .next/
+      
+      - name: List artifact files
+        run: ls ${{ steps.download.outputs.download-path }}
+      
+      - name: Deploy
+        run: echo 'Deploying ...' 

@@ -1,61 +1,29 @@
-name: CI
+name: Run and Test Next Project
 
 on:
   pull_request:
-    branches: [main, master]
-  push:
-    branches: [main, master]
+    branches: [main, develop]
 
 jobs:
-  build:
+  install:
+    uses: ./.github/workflows/build.yml
+    with:
+      sha: ${{ github.sha }}
+      build: false
+
+  test:
     runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x]
+    needs: install
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
+        id: download
         with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Run linter
-        run: npm run lint
-      
-      - name: Build project
-        run: npm run build
-        env:
-          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY || 'placeholder' }}
-          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: placeholder.firebaseapp.com
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: placeholder-project
-          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: placeholder.appspot.com
-          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '123456789'
-          NEXT_PUBLIC_FIREBASE_APP_ID: '1:123456789:web:placeholder'
+          name: build-${{ github.sha }}
+          path: .next/
 
-  e2e:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 20.x
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
+      - name: List artifact files
+        run: ls ${{ steps.download.outputs.download-path }}
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
@@ -70,8 +38,8 @@ jobs:
         run: npm run test:e2e
         env:
           CI: true
-          E2E_TEST_EMAIL: test@crowdcad.local
-          E2E_TEST_PASSWORD: TestPassword123!
+          E2E_TEST_EMAIL: ${{ vars.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
