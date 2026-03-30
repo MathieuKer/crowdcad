@@ -24,16 +24,27 @@ function buildFilter(constraints: QueryConstraint[]): string {
 
 export class PocketbaseDbService implements IDbService {
   async getDocument<T>(col: string, id: string): Promise<DocSnapshot<T>> {
-    try {
-      const record = await pb.collection(col).getOne(id);
-      return toSnapshot<T>(record as unknown as Record<string, unknown>);
-    } catch (err) {
-      const sErr = toPbServiceError(err);
-      if (sErr.code === 'not-found') {
-        return { id, exists: false, data: null };
+    // Retry up to 5 times on not-found: a record that was just created may not
+    // be readable yet on the very first GET under concurrent load. Under heavy
+    // parallel test execution, PocketBase can take >450ms to surface a new record.
+    const MAX_ATTEMPTS = 5;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      try {
+        const record = await pb.collection(col).getOne(id);
+        return toSnapshot<T>(record as unknown as Record<string, unknown>);
+      } catch (err) {
+        const sErr = toPbServiceError(err);
+        if (sErr.code === 'not-found') {
+          if (attempt < MAX_ATTEMPTS - 1) {
+            await new Promise<void>((r) => setTimeout(r, 200));
+            continue;
+          }
+          return { id, exists: false, data: null };
+        }
+        throw sErr;
       }
-      throw sErr;
     }
+    return { id, exists: false, data: null }; // unreachable but satisfies TS
   }
 
   async getCollection<T>(col: string): Promise<DocSnapshot<T>[]> {
@@ -177,13 +188,41 @@ export class PocketbaseDbService implements IDbService {
   ): Unsubscribe {
     let cancelled = false;
 
-    // Fire immediately with current state
-    this.getDocument<T>(col, id)
-      .then((snap) => { if (!cancelled) callback(snap); })
-      .catch((err) => { if (!cancelled) onError?.(err); });
+    // Poll until the document appears, then rely on SSE for live updates.
+    // PocketBase can transiently return 404 for a record that was just written
+    // (SQLite write + connection-pool contention under parallel test load).
+    // A fixed retry count is not sufficient; we loop until a deadline instead.
+    const POLL_INTERVAL_MS = 200;
+    const GIVE_UP_AFTER_MS = 10_000;
+    const deadline = Date.now() + GIVE_UP_AFTER_MS;
 
-    // Subscribe to realtime changes
+    const pollInitial = async () => {
+      while (!cancelled) {
+        try {
+          const record = await pb.collection(col).getOne(id);
+          if (!cancelled) callback(toSnapshot<T>(record as unknown as Record<string, unknown>));
+          return;
+        } catch (err) {
+          const sErr = toPbServiceError(err);
+          if (sErr.code !== 'not-found') {
+            if (!cancelled) onError?.(sErr);
+            return;
+          }
+          if (Date.now() >= deadline) {
+            // Give up — document truly does not exist.
+            if (!cancelled) callback({ id, exists: false, data: null });
+            return;
+          }
+          await new Promise<void>((r) => setTimeout(r, POLL_INTERVAL_MS));
+        }
+      }
+    };
+    pollInitial();
+
+    // SSE for live updates (updates, deletes) after the initial load.
+    // Guard with `cancelled` so a stale event cannot fire after cleanup.
     pb.collection(col).subscribe(id, (event) => {
+      if (cancelled) return;
       if (event.action === 'delete') {
         callback({ id, exists: false, data: null });
       } else {

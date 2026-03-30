@@ -15,7 +15,11 @@
 const { execFileSync, spawn } = require('child_process');
 const path = require('path');
 
-const PB_EXE = path.join(__dirname, '..', 'pocketbase.exe');
+const PB_EXE = path.join(
+  __dirname,
+  '..',
+  process.platform === 'win32' ? 'pocketbase.exe' : 'pocketbase',
+);
 const PB_DATA_DIR = path.join(__dirname, '..', 'tests', 'e2e', '.pb-data');
 const ADMIN_EMAIL = process.env.PB_E2E_ADMIN_EMAIL || 'admin@pbtest.local';
 const ADMIN_PASSWORD = process.env.PB_E2E_ADMIN_PASSWORD || 'Admin1234567890!';
