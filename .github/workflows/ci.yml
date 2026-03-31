@@ -23,7 +23,7 @@ jobs:
           path: .
 
       - name: List artifact files
-        run: ls ${{ steps.download.outputs.download-path }}
+        run: ls -la ${{ steps.download.outputs.download-path }}
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
