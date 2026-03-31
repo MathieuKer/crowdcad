@@ -56,9 +56,9 @@ Thumbs.db
 /.features-gen/
 /.features-gen-pocketbase/
 
-# PocketBase binary
-pocketbase.exe
-pocketbase
+# PocketBase binary (root-level only, so src/lib/services/pocketbase/ is not affected)
+/pocketbase.exe
+/pocketbase
 
 # Claude Code
 .claude/
