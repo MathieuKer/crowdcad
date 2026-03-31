@@ -5,59 +5,59 @@ on:
     branches: [main, develop]
 
 jobs:
-  # install:
-  #   uses: ./.github/workflows/install.yml
-  #   with:
-  #     sha: ${{ github.sha }}
-  #     build: false
+  install:
+    uses: ./.github/workflows/install.yml
+    with:
+      sha: ${{ github.sha }}
+      build: false
   
-  # test_check_dep:
-  #   runs-on: ubuntu-latest
-  #   needs: install
+  test_check_dep:
+    runs-on: ubuntu-latest
+    needs: install
 
-  #   outputs:
-  #     configured: ${{ steps.is_configured.outputs.configured }}
+    outputs:
+      configured: ${{ steps.is_configured.outputs.configured }}
 
-  #   steps:
-  #     - uses: actions/download-artifact@v4
-  #       id: download
-  #       with:
-  #         name: build-${{ github.sha }}
-  #         path: .
+    steps:
+      - uses: actions/download-artifact@v4
+        id: download
+        with:
+          name: build-${{ github.sha }}
+          path: .
       
-  #     - name: Check if tests are configured
-  #       id: is_configured
-  #       run: |
-  #         if [[ -z $(ls -la node_modules/.bin/playwright 2>/dev/null) ]]; then
-  #           echo "Playwright tests NOT configured. Will be skipped !"
-  #           echo "configured=false" >> $GITHUB_OUTPUT
-  #         else
-  #           echo "Playwright tests configured."
-  #           echo "configured=true" >> $GITHUB_OUTPUT
-  #         fi;
+      - name: Check if tests are configured
+        id: is_configured
+        run: |
+          if [[ -z $(ls -la node_modules/.bin/playwright 2>/dev/null) ]]; then
+            echo "Playwright tests NOT configured. Will be skipped !"
+            echo "configured=false" >> $GITHUB_OUTPUT
+          else
+            echo "Playwright tests configured."
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi;
 
   test:
     runs-on: ubuntu-latest
-    # needs: test_check_dep
-    # if: needs.test_check_dep.outputs.configured == 'true'
+    needs: test_check_dep
+    if: needs.test_check_dep.outputs.configured == 'true'
     
     steps:
-      # - uses: actions/checkout@v4
+      # - uses: actions:/checkout@v4
       
-      - uses: actions/cache/restore@v5
-        id: restore-cache
-        with:
-          path: .
-          key: cache-${{ github.sha }}
-
-      - if: steps.restore-cache.outputs.cache-hit != 'true'
-        run: exit 1 
-        
-      # - uses: actions/download-artifact@v4
-      #   id: download
+      # - uses: actions/cache/restore@v5
+      #   id: restore-cache
       #   with:
-      #     name: build-${{ github.sha }}
       #     path: .
+      #     key: cache-${{ github.sha }}
+
+      # - if: steps.restore-cache.outputs.cache-hit != 'true'
+      #   run: exit 1 
+        
+      - uses: actions/download-artifact@v4
+        id: download
+        with:
+          name: build-${{ github.sha }}
+          path: .
 
       # - name: List artifact files
       #   run: ls -la ${{ steps.download.outputs.download-path }}
@@ -67,11 +67,11 @@ jobs:
       #     node-version: 20.x
       #     cache: npm
       
-      # - name: Setup Java 21
-      #   uses: actions/setup-java@v4
-      #   with:
-      #     distribution: temurin
-      #     java-version: '21'
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
 
       - name: Install Playwright Chromium browser
         run: npx playwright install chromium --with-deps
@@ -91,11 +91,11 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-  # skip_test:
-  #   runs-on: ubuntu-latest
-  #   needs: test_check_dep
-  #   if: needs.test_check_dep.outputs.configured == 'false'
+  skip_test:
+    runs-on: ubuntu-latest
+    needs: test_check_dep
+    if: needs.test_check_dep.outputs.configured == 'false'
     
-  #   steps:
-  #     - run: echo -e "\033[0;31mPlaywright tests skipped ...\033[0m"
-  #     - run: exit 1
+    steps:
+      - run: echo -e "\033[0;31mPlaywright tests skipped ...\033[0m"
+      - run: exit 1
