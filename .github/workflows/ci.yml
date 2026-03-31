@@ -20,7 +20,7 @@ jobs:
         id: download
         with:
           name: build-${{ github.sha }}
-          path: .next/
+          path: .
 
       - name: List artifact files
         run: ls ${{ steps.download.outputs.download-path }}
