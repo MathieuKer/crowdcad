@@ -60,13 +60,13 @@ jobs:
           java-version: '21'
 
       - name: Install Playwright Chromium browser
-        run: sudo --preserve-env $(which npx) playwright install chromium --with-deps
+        run: sudo /usr/local/bin/npx playwright install chromium --with-deps
       
-      - name: Install Playwright system dependencies
-        run: sudo npx playwright install-deps chromium
+#      - name: Install Playwright system dependencies
+#        run: sudo npx playwright install-deps chromium
 
-      - name: Install Playwright Chromium browser
-        run: npx playwright install chromium
+#      - name: Install Playwright Chromium browser
+#        run: npx playwright install chromium
 
       - name: Run E2E tests
         run: npm run test:e2e
