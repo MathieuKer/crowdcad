@@ -55,6 +55,9 @@ jobs:
           ls -la /home/runner/work/crowdcad/
           ls -la /usr/local/bin/
       
+      - name: Set rights
+        run: sudo chown runner:runner /usr/local/bin/npx
+      
       - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
