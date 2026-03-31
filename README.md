@@ -24,6 +24,22 @@ CrowdCAD is an open-source, browser-based Computer-Aided Dispatch (CAD) system f
 
 #### Quickstart
 
+**With Docker (Recommended)**
+
+1. Secure your environment variables (see Firebase setup below):
+```bash
+cp .env.example .env.local
+```
+
+2. Build and run the container:
+```bash
+docker compose --env-file .env.local up --build -d
+```
+
+3. The dev server will run at `http://localhost:3000`. To stop it, run `docker compose down`.
+
+**Without Docker**
+
 1. Fork then clone (recommended — preserves attribution and lets you receive upstream updates):
 
 ```bash
