@@ -55,3 +55,10 @@ Thumbs.db
 /test-results/
 /.features-gen/
 /.features-gen-pocketbase/
+
+# PocketBase binary
+pocketbase.exe
+pocketbase
+
+# Claude Code
+.claude/
