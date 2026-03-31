@@ -17,7 +17,7 @@ jobs:
           exit 1
           fi
 
-  build:
+  install:
     needs: check
     uses: ./.github/workflows/install.yml
     with:
@@ -25,16 +25,16 @@ jobs:
     secrets: inherit
 
   deploy-netlify:
-    needs: build
+    needs: install
     runs-on: ubuntu-latest
     environment: production
-    if: needs.build.result == 'success'
+    if: needs.install.result == 'success'
     steps:        
       - name: Download artifact
         uses: actions/download-artifact@v4
         id: download
         with:
-          name: ${{ needs.build.outputs.artifact-name }}
+          name: ${{ needs.install.outputs.artifact-name }}
           path: .
       
       - name: List artifact files
