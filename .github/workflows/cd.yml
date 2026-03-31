@@ -19,7 +19,7 @@ jobs:
 
   build:
     needs: check
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/install.yml
     with:
       sha: ${{ github.sha }}
       build: true
