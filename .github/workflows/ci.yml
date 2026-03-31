@@ -55,8 +55,10 @@ jobs:
           ls -la /home/runner/work/crowdcad/
           ls -la /usr/local/bin/
       
-      - name: Set rights
-        run: sudo chown runner:runner /usr/local/bin/npx
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 25
+          cache: npm
       
       - name: Setup Java 21
         uses: actions/setup-java@v4
