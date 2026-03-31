@@ -51,9 +51,6 @@ jobs:
       - name: List artifact files
         run: ls -la ${{ steps.download.outputs.download-path }}
       
-      - name: List artifact files
-        run: ls -la node_modules/.bin
-      
       - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
@@ -61,7 +58,9 @@ jobs:
           java-version: '21'
 
       - name: Install Playwright Chromium browser
-        run: npx --yes playwright install chromium --with-deps
+        run: |
+          whoami
+          sudo npx playwright install chromium --with-deps
 
       - name: Run E2E tests
         run: npm run test:e2e
