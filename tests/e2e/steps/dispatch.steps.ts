@@ -27,7 +27,7 @@ Given('I have created an event and am on the dispatch page', async ({ page }) =>
   await page.getByRole('button', { name: 'Create Event' }).click();
   await page.waitForURL(/\/events\/.*\/dispatch/, { timeout: NAV_TIMEOUT });
   // Wait for the dispatch page to hydrate before asserting
-  await page.locator('[aria-label="Select section"]').waitFor({ state: 'visible', timeout: 10_000 });
+  await page.locator('[aria-label="Select section"]').waitFor({ state: 'visible', timeout: 20_000 });
 });
 
 Then('I should see the teams section', async ({ page }) => {

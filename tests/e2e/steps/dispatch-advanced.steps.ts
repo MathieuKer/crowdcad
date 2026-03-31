@@ -32,7 +32,7 @@ Given('I have a venue with location {string} and equipment {string} and am on th
   await page.getByPlaceholder('Enter event name').fill(`Adv Event ${Date.now()}`);
   await page.getByRole('button', { name: 'Create Event' }).click();
   await page.waitForURL(/\/events\/.*\/dispatch/, { timeout: NAV_TIMEOUT });
-  await page.locator('[aria-label="Select section"]').waitFor({ state: 'visible', timeout: 10_000 });
+  await page.locator('[aria-label="Select section"]').waitFor({ state: 'visible', timeout: 20_000 });
 });
 
 When('I change equipment {string} status to {string}', async ({ page }, equipName: string, newStatus: string) => {

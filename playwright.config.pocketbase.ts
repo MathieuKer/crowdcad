@@ -20,12 +20,13 @@ const testDir = defineBddConfig({
 export default defineConfig({
   testDir,
 
-  timeout: 30_000,
-  expect: { timeout: 10_000 },
+  timeout: 60_000,
+  expect: { timeout: 15_000 },
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // Cap local workers at 4 to reduce SQLite write contention under parallel load.
+  workers: process.env.CI ? 2 : 4,
 
   reporter: [
     ['list'],

@@ -199,8 +199,11 @@ export class PocketbaseDbService implements IDbService {
 
     // Poll until the document appears (handles the case where the record was
     // just created and PocketBase's SSE has not emitted the create event yet).
-    const POLL_INTERVAL_MS = 200;
-    const GIVE_UP_AFTER_MS = 10_000;
+    const POLL_INTERVAL_MS = 100;
+    // PocketBase (SQLite WAL) can take several seconds to surface a record
+    // that was just written under heavy parallel write load. Give it 30s before
+    // concluding the document truly does not exist.
+    const GIVE_UP_AFTER_MS = 30_000;
     const deadline = Date.now() + GIVE_UP_AFTER_MS;
 
     const pollInitial = async () => {
@@ -214,12 +217,21 @@ export class PocketbaseDbService implements IDbService {
           return;
         } catch (err) {
           const sErr = toPbServiceError(err);
-          if (sErr.code !== 'not-found') {
+          // Only bail immediately on permission errors — those are not transient.
+          // Treat not-found, server errors (5xx), and network errors as retryable:
+          // PocketBase/SQLite can take several seconds to surface a just-written
+          // record under heavy parallel load, and may return transient 5xx errors.
+          if (sErr.code === 'permission-denied' || sErr.code === 'unauthenticated') {
             if (!cancelled) onError?.(sErr);
             return;
           }
           if (Date.now() >= deadline) {
-            if (!cancelled && !initialLoadDone) callback({ id, exists: false, data: null });
+            // After the deadline, distinguish "confirmed not-found" from "slow server".
+            if (sErr.code === 'not-found') {
+              if (!cancelled && !initialLoadDone) callback({ id, exists: false, data: null });
+            } else {
+              if (!cancelled) onError?.(sErr);
+            }
             return;
           }
           await new Promise<void>((r) => setTimeout(r, POLL_INTERVAL_MS));
