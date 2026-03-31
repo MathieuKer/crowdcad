@@ -22,7 +22,6 @@ jobs:
     uses: ./.github/workflows/install.yml
     with:
       sha: ${{ github.sha }}
-      build: true
     secrets: inherit
 
   deploy-netlify:
@@ -36,10 +35,22 @@ jobs:
         id: download
         with:
           name: ${{ needs.build.outputs.artifact-name }}
-          path: .next/
+          path: .
       
       - name: List artifact files
         run: ls ${{ steps.download.outputs.download-path }}
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ vars.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          DISABLE_TELEMETRY: true
       
       - name: Deploy
         run: echo 'Deploying ...' 
