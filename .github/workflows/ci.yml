@@ -42,6 +42,10 @@ jobs:
     if: needs.test_check_dep.outputs.configured == 'true'
     
     steps:
+      - uses: actions/checkout@v4
+
+      - run: git update-index --chmod=+x ./node_modules/.bin/*
+    
       - uses: actions/download-artifact@v4
         id: download
         with:
