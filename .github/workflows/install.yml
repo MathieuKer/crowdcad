@@ -1,4 +1,4 @@
-name: Build project and upload artifact
+name: Install deps project and upload artifact
 
 on:
   workflow_call:
@@ -13,7 +13,7 @@ on:
 
 jobs:
     
-  build:
+  install:
     runs-on: ubuntu-latest
     outputs:
       artifact-name: build-${{ inputs.sha }}
@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: echo "dir=$(npm config get cache)" >> ${GITHUB_OUTPUT}
 
-      - uses: actions/cache/save@v5
+      - uses: actions/cache@v5
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
