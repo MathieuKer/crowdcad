@@ -57,8 +57,8 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-#      - name: Install Playwright Chromium browser
-#        run: sudo npx playwright install chromium --with-deps
+      - name: Install Playwright Chromium browser
+        run: sudo --preserve-env $(which npx) playwright install chromium --with-deps
       
       - name: Install Playwright system dependencies
         run: sudo npx playwright install-deps chromium
