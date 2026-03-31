@@ -65,7 +65,7 @@ jobs:
           java-version: '21'
 
       - name: Install Playwright Chromium browser
-        run: sudo node_modules/.bin/playwright install chromium --with-deps
+        run: npx playwright install chromium --with-deps
       
 #      - name: Install Playwright system dependencies
 #        run: sudo npx playwright install-deps chromium
