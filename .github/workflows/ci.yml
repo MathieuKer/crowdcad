@@ -56,11 +56,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      
+      - run: whoami
 
       - name: Install Playwright Chromium browser
-        run: |
-          whoami
-          sudo npx playwright install chromium --with-deps
+        run: sudo npx playwright install chromium --with-deps
 
       - name: Run E2E tests
         run: npm run test:e2e
