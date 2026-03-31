@@ -9,7 +9,6 @@ jobs:
     uses: ./.github/workflows/install.yml
     with:
       sha: ${{ github.sha }}
-      build: false
   
   test_check_dep:
     runs-on: ubuntu-latest
@@ -42,26 +41,23 @@ jobs:
     if: needs.test_check_dep.outputs.configured == 'true'
     
     steps:
-      # - uses: actions:/checkout@v4
-      
-      # - uses: actions/cache/restore@v5
-      #   id: restore-cache
-      #   with:
-      #     path: .
-      #     key: cache-${{ github.sha }}
-
-      # - if: steps.restore-cache.outputs.cache-hit != 'true'
-      #   run: exit 1 
-        
       - uses: actions/download-artifact@v4
         id: download
         with:
           name: build-${{ github.sha }}
           path: .
 
+      - name: Get npm cache directory
+        id: npm-cache-dir
+        shell: bash
+        run: echo "dir=$(npm config get cache)" >> ${GITHUB_OUTPUT}
+
       - uses: actions/cache@v5
         with:
+          path: ${{ steps.npm-cache-dir.outputs.dir }}
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       # - name: List artifact files
       #   run: ls -la ${{ steps.download.outputs.download-path }}
