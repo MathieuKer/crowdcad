@@ -70,10 +70,14 @@ export class PocketbaseAuthService implements IAuthService {
       throw new ServiceError('auth/no-current-user', 'No user is signed in.');
     }
     const userId = (pb.authStore.model as Record<string, unknown>).id as string;
+    if (updates.photoURL !== undefined) {
+      throw new ServiceError(
+        'not-supported',
+        'PocketBase adapter does not support URL-based photoURL updates. Upload an avatar file directly via the PocketBase API instead.',
+      );
+    }
     const data: Record<string, unknown> = {};
     if (updates.displayName !== undefined) data.name = updates.displayName;
-    // photoURL updates (URL-based) are not directly supported by PocketBase's
-    // file-upload avatar system; ignore for now.
     try {
       await pb.collection('users').update(userId, data);
       await pb.collection('users').authRefresh();

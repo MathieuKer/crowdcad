@@ -23,7 +23,7 @@ export class PocketbaseStorageService implements IStorageService {
 
       let id: string | null = null;
       try {
-        const existing = await pb.collection('_storage').getFirstListItem(`path = "${path}"`);
+        const existing = await pb.collection('_storage').getFirstListItem(pb.filter('path = {:path}', { path }));
         id = (existing as unknown as Record<string, unknown>).id as string;
       } catch (findErr) {
         const sErr = toPbServiceError(findErr);
@@ -43,7 +43,7 @@ export class PocketbaseStorageService implements IStorageService {
 
   async getDownloadURL(path: string): Promise<string> {
     try {
-      const record = await pb.collection('_storage').getFirstListItem(`path = "${path}"`);
+      const record = await pb.collection('_storage').getFirstListItem(pb.filter('path = {:path}', { path }));
       return this._buildUrl(record as unknown as Record<string, unknown>);
     } catch (err) {
       const sErr = toPbServiceError(err);

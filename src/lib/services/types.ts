@@ -19,7 +19,7 @@ export interface DocSnapshot<T = Record<string, unknown>> {
   data: T | null;
 }
 
-export type WhereOperator = '==' | 'array-contains';
+export type WhereOperator = '==' | '!=' | 'array-contains';
 
 export interface QueryConstraint {
   field: string;

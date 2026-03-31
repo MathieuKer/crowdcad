@@ -8,14 +8,14 @@ function toSnapshot<T>(record: Record<string, unknown>): DocSnapshot<T> {
   return { id: record.id as string, exists: true, data: record as T };
 }
 
-/** Build a PocketBase filter string from QueryConstraints. */
+/** Build a PocketBase filter string from QueryConstraints using pb.filter() for safe value escaping. */
 function buildFilter(constraints: QueryConstraint[]): string {
   if (!constraints.length) return '';
   return constraints
     .map((c) => {
-      const val = typeof c.value === 'string' ? `"${c.value}"` : String(c.value);
-      if (c.op === '==') return `${c.field} = ${val}`;
-      if (c.op === 'array-contains') return `${c.field} ~ ${val}`;
+      if (c.op === '==') return pb.filter(`${c.field} = {:val}`, { val: c.value });
+      if (c.op === '!=') return pb.filter(`${c.field} != {:val}`, { val: c.value });
+      if (c.op === 'array-contains') return pb.filter(`${c.field} ~ {:val}`, { val: c.value });
       return '';
     })
     .filter(Boolean)
@@ -24,27 +24,14 @@ function buildFilter(constraints: QueryConstraint[]): string {
 
 export class PocketbaseDbService implements IDbService {
   async getDocument<T>(col: string, id: string): Promise<DocSnapshot<T>> {
-    // Retry up to 5 times on not-found: a record that was just created may not
-    // be readable yet on the very first GET under concurrent load. Under heavy
-    // parallel test execution, PocketBase can take >450ms to surface a new record.
-    const MAX_ATTEMPTS = 5;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      try {
-        const record = await pb.collection(col).getOne(id);
-        return toSnapshot<T>(record as unknown as Record<string, unknown>);
-      } catch (err) {
-        const sErr = toPbServiceError(err);
-        if (sErr.code === 'not-found') {
-          if (attempt < MAX_ATTEMPTS - 1) {
-            await new Promise<void>((r) => setTimeout(r, 200));
-            continue;
-          }
-          return { id, exists: false, data: null };
-        }
-        throw sErr;
-      }
+    try {
+      const record = await pb.collection(col).getOne(id);
+      return toSnapshot<T>(record as unknown as Record<string, unknown>);
+    } catch (err) {
+      const sErr = toPbServiceError(err);
+      if (sErr.code === 'not-found') return { id, exists: false, data: null };
+      throw sErr;
     }
-    return { id, exists: false, data: null }; // unreachable but satisfies TS
   }
 
   async getCollection<T>(col: string): Promise<DocSnapshot<T>[]> {
@@ -79,8 +66,13 @@ export class PocketbaseDbService implements IDbService {
     col: string,
     id: string,
     data: Partial<T>,
-    _options?: { merge?: boolean },
+    options?: { merge?: boolean },
   ): Promise<void> {
+    // PocketBase PATCH always merges — only the provided fields are updated.
+    // True overwrite (merge === false) is not natively supported; this adapter
+    // always patches. All current call-sites pass { merge: true }, so the
+    // behaviour is correct. A full overwrite would require a delete + create.
+    void options;
     try {
       await pb.collection(col).update(id, data as Record<string, unknown>);
     } catch (updateErr) {
@@ -187,20 +179,38 @@ export class PocketbaseDbService implements IDbService {
     onError?: (error: Error) => void,
   ): Unsubscribe {
     let cancelled = false;
+    // Prevents a double-fire when an SSE event races ahead of the initial poll.
+    // Once either the poll or SSE delivers the first snapshot, this is set to
+    // true so the other path becomes a no-op.
+    let initialLoadDone = false;
 
-    // Poll until the document appears, then rely on SSE for live updates.
-    // PocketBase can transiently return 404 for a record that was just written
-    // (SQLite write + connection-pool contention under parallel test load).
-    // A fixed retry count is not sufficient; we loop until a deadline instead.
+    // Subscribe to SSE immediately so we don't miss any events that arrive
+    // while the initial poll is in-flight.
+    pb.collection(col).subscribe(id, (event) => {
+      if (cancelled) return;
+      // SSE beat the poll — mark initial load done so the poll callback is skipped.
+      initialLoadDone = true;
+      if (event.action === 'delete') {
+        callback({ id, exists: false, data: null });
+      } else {
+        callback(toSnapshot<T>(event.record as unknown as Record<string, unknown>));
+      }
+    }).catch((err) => onError?.(toPbServiceError(err)));
+
+    // Poll until the document appears (handles the case where the record was
+    // just created and PocketBase's SSE has not emitted the create event yet).
     const POLL_INTERVAL_MS = 200;
     const GIVE_UP_AFTER_MS = 10_000;
     const deadline = Date.now() + GIVE_UP_AFTER_MS;
 
     const pollInitial = async () => {
-      while (!cancelled) {
+      while (!cancelled && !initialLoadDone) {
         try {
           const record = await pb.collection(col).getOne(id);
-          if (!cancelled) callback(toSnapshot<T>(record as unknown as Record<string, unknown>));
+          if (!cancelled && !initialLoadDone) {
+            initialLoadDone = true;
+            callback(toSnapshot<T>(record as unknown as Record<string, unknown>));
+          }
           return;
         } catch (err) {
           const sErr = toPbServiceError(err);
@@ -209,8 +219,7 @@ export class PocketbaseDbService implements IDbService {
             return;
           }
           if (Date.now() >= deadline) {
-            // Give up — document truly does not exist.
-            if (!cancelled) callback({ id, exists: false, data: null });
+            if (!cancelled && !initialLoadDone) callback({ id, exists: false, data: null });
             return;
           }
           await new Promise<void>((r) => setTimeout(r, POLL_INTERVAL_MS));
@@ -218,17 +227,6 @@ export class PocketbaseDbService implements IDbService {
       }
     };
     pollInitial();
-
-    // SSE for live updates (updates, deletes) after the initial load.
-    // Guard with `cancelled` so a stale event cannot fire after cleanup.
-    pb.collection(col).subscribe(id, (event) => {
-      if (cancelled) return;
-      if (event.action === 'delete') {
-        callback({ id, exists: false, data: null });
-      } else {
-        callback(toSnapshot<T>(event.record as unknown as Record<string, unknown>));
-      }
-    }).catch((err) => onError?.(toPbServiceError(err)));
 
     return () => {
       cancelled = true;
