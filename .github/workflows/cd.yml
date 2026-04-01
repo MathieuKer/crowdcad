@@ -39,7 +39,7 @@ jobs:
       - name: Setup project
         uses: ./.github/actions/setup
         with:
-          node-version: "20"
+          node-version: ${{ vars.NODE_VERSION }}
 
       - name: Cache Next.js build
         uses: actions/cache@v4
