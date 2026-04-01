@@ -74,6 +74,3 @@ jobs:
 
       - name: Report deploy URL
         run: echo "✅ Deployed to ${{ steps.deploy.outputs.deploy-url || 'no-deploy' }}"
-      
-      - name: Deploy
-        run: echo 'Deploying ...' 
