@@ -6,54 +6,16 @@ on:
       - main
       - master
       - develop
-      - "release/**"
-      - "hotfix/**"
-      - "v[0-9]+.[0-9]+"
   pull_request:
     branches:
       - main
       - master
       - develop
-      - "release/**"
-      - "hotfix/**"
-      - "v[0-9]+.[0-9]+"
 
 jobs:
-  install:
-    uses: ./.github/workflows/install.yml
-    with:
-      sha: ${{ github.sha }}
-  
-  test_check_dep:
-    runs-on: ubuntu-latest
-    needs: install
-
-    outputs:
-      configured: ${{ steps.is_configured.outputs.configured }}
-
-    steps:
-      - uses: actions/download-artifact@v4
-        id: download
-        with:
-          name: build-${{ github.sha }}
-          path: .
-      
-      - name: Check if tests are configured
-        id: is_configured
-        run: |
-          if [[ -z $(ls -la node_modules/.bin/playwright 2>/dev/null) ]]; then
-            echo "Playwright tests NOT configured. Will be skipped !"
-            echo "configured=false" >> $GITHUB_OUTPUT
-          else
-            echo "Playwright tests configured."
-            echo "configured=true" >> $GITHUB_OUTPUT
-          fi;
 
   test:
     runs-on: ubuntu-latest
-    needs: test_check_dep
-    if: needs.test_check_dep.outputs.configured == 'true'
-
     timeout-minutes: 15
     
     steps:
@@ -62,7 +24,13 @@ jobs:
       - name: Setup project
         uses: ./.github/actions/setup
         with:
-          node-version: "20"
+          node-version: ${{ vars.NODE_VERSION }}
+      
+      - name: Check if playwright installed
+        run: |
+          [[ -z $(ls -la node_modules/.bin/playwright 2>/dev/null) ]] &&
+            echo -e "\033[0;31mPlaywright tests NOT configured. Please install playwright module.\033[0m" &&
+            exit 1
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -93,12 +61,3 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
-
-  skip_test:
-    runs-on: ubuntu-latest
-    needs: test_check_dep
-    if: needs.test_check_dep.outputs.configured == 'false'
-    
-    steps:
-      - run: echo -e "\033[0;31mPlaywright tests skipped ...\033[0m"
-      - run: exit 1
