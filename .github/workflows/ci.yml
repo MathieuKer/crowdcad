@@ -13,10 +13,23 @@ on:
       - develop
 
 jobs:
+  set-environment:
+    name: Resolve environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+ 
+      - id: set-env
+        uses: ./.github/actions/set-environment
+    
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: Development
+
+    needs: set-environment
+    environment: ${{ needs.set-environment.outputs.environment }}
     
     steps:
       - uses: actions/checkout@v4
