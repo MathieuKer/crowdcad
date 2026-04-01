@@ -141,6 +141,9 @@ jobs:
           mkdir -p "gh-pages/${PREFIX}"
           cp -r playwright-report/. "gh-pages/${PREFIX}/"
 
+      - shell: bash
+        run: find . -name "generate-index.js"
+
       - name: Generate index files
         shell: bash
         run: |
