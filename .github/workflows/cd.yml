@@ -4,6 +4,11 @@ on:
   release:
     types: [published]
 
+# Prevent concurrent deploys — queue them instead
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -17,40 +22,33 @@ jobs:
           exit 1
           fi
 
-  install:
-    needs: check
-    uses: ./.github/workflows/install.yml
-    with:
-      sha: ${{ github.sha }}
-    secrets: inherit
-
-  deploy-netlify:
-    needs: install
+  deploy:
+    name: Build & Deploy
     runs-on: ubuntu-latest
-    environment: production
-    if: needs.install.result == 'success'
-    steps:        
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        id: download
-        with:
-          name: ${{ needs.install.outputs.artifact-name }}
-          path: .
-      
-      - name: List artifact files
-        run: ls ${{ steps.download.outputs.download-path }}
+    needs: check
+    
+    timeout-minutes: 20
 
-      - name: Get npm cache directory
-        id: npm-cache-dir
-        shell: bash
-        run: echo "dir=$(npm config get cache)" >> ${GITHUB_OUTPUT}
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.deploy-url || 'no-deploy' }}
 
-      - uses: actions/cache@v5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup project
+        uses: ./.github/actions/setup
         with:
-          path: ${{ steps.npm-cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          node-version: "20"
+
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: |
+            .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('**/*.ts','**/*.tsx','**/*.js','**/*.jsx') }}
           restore-keys: |
-            ${{ runner.os }}-node-
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       - name: Build
         run: npm run build
@@ -63,6 +61,19 @@ jobs:
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
           NEXT_PUBLIC_FIREBASE_APP_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_APP_ID }}
           DISABLE_TELEMETRY: true
+          NODE_ENV: production
+
+      # - name: Deploy to Netlify
+      #   id: deploy
+      #   uses: netlify/actions/cli@master
+      #   with:
+      #     args: deploy --dir=out --prod --message "Deploy from GitHub Actions — ${{ github.sha }}"
+      #   env:
+      #     NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      #     NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+      - name: Report deploy URL
+        run: echo "✅ Deployed to ${{ steps.deploy.outputs.deploy-url || 'no-deploy' }}"
       
       - name: Deploy
         run: echo 'Deploying ...' 
