@@ -140,6 +140,15 @@ jobs:
           PREFIX="${{ needs.set-report-name.outputs.report-prefix }}"
           mkdir -p "gh-pages/${PREFIX}"
           cp -r playwright-report/. "gh-pages/${PREFIX}/"
+
+      - name: Generate index files
+        shell: bash
+        run: |
+          for folder in $(find gh-pages -not -path '*/.*' -type d); do
+          	if [[ -z $(ls ${folder}/index.html 2>/dev/null) && -z $(find ${folder} -maxdepth 1 -type f) && $(ls ${folder} | wc -l) -ne 0 ]]; then
+          		node .github/scripts/generate-index.js ${folder} gh-pages/;
+          	fi; 
+          done;
  
       - name: Commit and push to gh-pages
         run: |
