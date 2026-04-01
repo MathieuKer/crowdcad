@@ -98,7 +98,12 @@ jobs:
       - name: Resolve report prefix
         id: set-prefix
         run: |
-          BRANCH=$(echo "${GITHUB_REF_NAME}" | sed 's/\//-/g')
+          if [[ -n "${{ github.head_ref }}" ]]; then
+            BRANCH="${{ github.head_ref }}"
+          else
+            BRANCH="${GITHUB_REF_NAME}"
+          fi
+          BRANCH=$(echo "${BRANCH}" | sed 's/\//-/g')
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
           echo "report-prefix=${BRANCH}/${SHORT_SHA}" >> $GITHUB_OUTPUT
 
