@@ -81,7 +81,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report-${{ github.ref }}
+          name: playwright-report-${{ github.sha }}
           path: playwright-report/
           retention-days: 1
 
@@ -112,7 +112,7 @@ jobs:
       - name: Download Playwright report artifact
         uses: actions/download-artifact@v4
         with:
-          name: playwright-report-${{ github.ref }}
+          name: playwright-report-${{ github.sha }}
           path: playwright-report/
  
       - name: Checkout gh-pages branch
