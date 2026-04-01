@@ -28,9 +28,10 @@ jobs:
       
       - name: Check if playwright installed
         run: |
-          [[ -z $(ls -la node_modules/.bin/playwright 2>/dev/null) ]] &&
-            echo -e "\033[0;31mPlaywright tests NOT configured. Please install playwright module.\033[0m" &&
+          if [[ -z $(ls -la node_modules/.bin/playwright 2>/dev/null) ]]; then
+            echo -e "\033[0;31mPlaywright tests NOT configured. Please install playwright module.\033[0m"
             exit 1
+          fi;
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
