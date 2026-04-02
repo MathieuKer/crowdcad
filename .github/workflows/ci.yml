@@ -139,10 +139,12 @@ jobs:
 
       - name: Generate index files
         shell: bash
+        # Remove all index pages - regenerate them
         run: |
           cd gh-pages
+          find . -name "index.html" -exec rm -f {} \;
           for folder in $(find . -not -path '*/.*' -type d); do
-          	if [[ -z $(ls ${folder}/index.html 2>/dev/null) && -z $(find ${folder} -maxdepth 1 -type f) && $(ls ${folder} | wc -l) -ne 0 ]]; then
+          	if [[ $(ls ${folder} | wc -l) -ne 0 ]]; then
           		node ./.github/scripts/generate-index.js ${folder} "${{ needs.set-env.outputs.base-url }}/${folder}";
           	fi; 
           done;
