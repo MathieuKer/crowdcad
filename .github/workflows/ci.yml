@@ -103,28 +103,6 @@ jobs:
           path: playwright-report/
           retention-days: 1
 
-  # set-report-name:
-  #   name: Name Playwright report before exposing it
-  #   runs-on: ubuntu-latest
-  #   needs: set-env
-  #   if: success()
-
-  #   outputs:
-  #     report-prefix: ${{ steps.set-prefix.outputs.report-prefix }}
-
-  #   steps:
-  #     - name: Resolve report prefix
-  #       id: set-prefix
-  #       run: |
-  #         if [[ -n "${{ github.head_ref }}" ]]; then
-  #           BRANCH="${{ github.head_ref }}"
-  #         else
-  #           BRANCH="${GITHUB_REF_NAME}"
-  #         fi
-  #         BRANCH=$(echo "${BRANCH}" | sed 's/\//-/g')
-  #         SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-  #         echo "report-prefix=${BRANCH}/${SHORT_SHA}" >> $GITHUB_OUTPUT
-
   publish-report:
     name: Publish report to GitHub Pages
     runs-on: ubuntu-latest
@@ -159,16 +137,18 @@ jobs:
           mkdir -p "./gh-pages/${PREFIX}"
           cp -r playwright-report/. "./gh-pages/${PREFIX}/"
 
+      # - name: Generate index files
+      #   shell: bash
+      #   run: |
+      #     for folder in $(find gh-pages -not -path '*/.*' -type d); do
+      #     	if [[ -z $(ls ${folder}/index.html 2>/dev/null) && -z $(find ${folder} -maxdepth 1 -type f) && $(ls ${folder} | wc -l) -ne 0 ]]; then
+      #     		node ./.github/scripts/generate-index.js ${folder} "${{ needs.set-env.outputs.base-url }}";
+      #     	fi; 
+      #     done;
       - name: Generate index files
         shell: bash
-        run: |
-          for folder in $(find gh-pages -not -path '*/.*' -type d); do
-          	if [[ -z $(ls ${folder}/index.html 2>/dev/null) && -z $(find ${folder} -maxdepth 1 -type f) && $(ls ${folder} | wc -l) -ne 0 ]]; then
-          		node ./.github/scripts/generate-index.js ${folder} "${{ needs.set-env.outputs.base-url }}";
-          	fi; 
-          done;
+        run: node ./.github/scripts/generate-index.js gh-pages "${{ needs.set-env.outputs.base-url }}"
           
- 
       - name: Commit and push to gh-pages
         run: |
           PREFIX="${{ needs.set-env.outputs.report-prefix }}"
