@@ -175,7 +175,7 @@ jobs:
           cd gh-pages
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "${PREFIX}/"
+          git add "${PREFIX}/" $(find . -name "index.html" -type f)
           git commit -m "report: ${PREFIX} [${GITHUB_SHA::7}]"
           git push origin HEAD:gh-pages
  
