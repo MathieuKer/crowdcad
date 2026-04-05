@@ -9,7 +9,7 @@
  * Example: node .github/scripts/generate-index.js ./report https://org.github.io/repo
  */
 
-const fs   = require("fs");
+const fs = require("fs");
 const path = require("path");
 
 const [pagesDir, baseUrl] = process.argv.slice(2);
@@ -19,37 +19,31 @@ if (!pagesDir || !baseUrl) {
   process.exit(1);
 }
 
-// Collect all branch/sha pairs that contain an index.html
-const reports = [];
+all = fs.readdirSync(pagesDir, { recursive: true, withFileTypes: true })
+  .filter((result) => result.isDirectory())
+  .map((result) => path.join(result.parentPath, result.name))
+  .filter((result) => !!fs.readdirSync(result, { withFileTypes: true }).filter((r) => r.isDirectory() && !["trace", "data"].includes(r.name)).length)
 
-for (const branch of fs.readdirSync(pagesDir)) {
-  const branchPath = path.join(pagesDir, branch);
-  if (!fs.statSync(branchPath).isDirectory()) continue;
-
-  for (const sha of fs.readdirSync(branchPath)) {
-    const reportIndex = path.join(branchPath, sha, "index.html");
-    if (fs.existsSync(reportIndex)) {
-      const stat = fs.statSync(path.join(branchPath, sha));
-      reports.push({ branch, sha, mtime: stat.mtimeMs });
-    }
-  }
+if (all.length) {
+  all.splice(0, 0, pagesDir);
 }
 
-// Sort most recent first
-reports.sort((a, b) => b.mtime - a.mtime);
+for (indexPath of all) {
+  entities = fs.readdirSync(indexPath, { withFileTypes: true })
+    .filter((result) => result.name !== "index.html")
 
-const rows = reports
-  .map(
-    ({ branch, sha }) => `
+  const buildUrl = (entity) => path.join(`${baseUrl}/${entity.parentPath}/${entity.name}/`);
+  const rows = entities
+    .map(
+      (entity) => `
       <tr>
-        <td>${branch}</td>
-        <td class="sha"><a href="${baseUrl}/${branch}/${sha}/" target="_blank">${sha}</a></td>
-        <td><a href="${baseUrl}/${branch}/${sha}/" target="_blank">View report →</a></td>
+        <td>${entity.name}</td>
+        <td><a href="${buildUrl(entity)}/" target="_blank">Get In →</a></td>
       </tr>`
-  )
-  .join("\n");
+    )
+    .join("\n");
 
-const html = `<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -88,23 +82,23 @@ const html = `<!DOCTYPE html>
 </head>
 <body>
   <h1>📊 Playwright Test Reports</h1>
-  <p class="subtitle">${reports.length} report${reports.length !== 1 ? "s" : ""} — most recent first</p>
+  <p class="subtitle">${entities.length} report${entities.length !== 1 ? "s" : ""} — most recent first</p>
   <table>
     <thead>
       <tr>
-        <th>Branch</th>
-        <th>Commit</th>
-        <th>Report</th>
+        <th>Folder</th>
+        <th>Get In</th>
       </tr>
     </thead>
     <tbody>
-      ${reports.length ? rows : '<tr><td colspan="3" class="empty">No reports yet.</td></tr>'}
+      ${entities.length ? rows : '<tr><td colspan="3" class="empty">No reports yet.</td></tr>'}
     </tbody>
   </table>
 </body>
 </html>
 `;
 
-const outPath = path.join(pagesDir, "index.html");
-fs.writeFileSync(outPath, html, "utf8");
-console.log(`✅ index.html written → ${outPath} (${reports.length} reports)`);
+  const outPath = path.join(indexPath, "index.html");
+  fs.writeFileSync(outPath, html, "utf8");
+  console.log(`✅ index.html written → ${outPath} (${entities.length} entities)`);
+}
