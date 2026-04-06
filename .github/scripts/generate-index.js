@@ -20,9 +20,9 @@ if (!pagesDir || !baseUrl) {
 }
 
 all = fs.readdirSync(pagesDir, { recursive: true, withFileTypes: true })
-  .filter((result) => result.isDirectory())
+  .filter((result) => result.isDirectory() && result.parentPath.split("/").length <= 2)
   .map((result) => path.join(result.parentPath, result.name))
-  .filter((result) => !!fs.readdirSync(result, { withFileTypes: true }).filter((r) => r.isDirectory() && !["trace", "data"].includes(r.name)).length)
+  .filter((result) => fs.readdirSync(result, { withFileTypes: true }).filter((r) => r.isDirectory()).length)
 
 if (all.length) {
   all.splice(0, 0, pagesDir);
@@ -32,7 +32,7 @@ for (indexPath of all) {
   entities = fs.readdirSync(indexPath, { withFileTypes: true })
     .filter((result) => result.name !== "index.html")
 
-  const buildUrl = (entity) => path.join(`${baseUrl}/${entity.parentPath}/${entity.name}/`);
+  const buildUrl = (entity) => path.join(baseUrl, entity.parentPath, entity.name);
   const rows = entities
     .map(
       (entity) => `
