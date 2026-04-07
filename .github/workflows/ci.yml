@@ -152,6 +152,7 @@ jobs:
       - name: Generate index files
         shell: bash
         run: |
+            find gh-pages -name "index.html" -maxdepth 2 -exec rm -f {} \;
             node ./.github/scripts/generate-index.js gh-pages ${{ needs.set-env.outputs.base-url }};
           
       - name: Commit and push to gh-pages
