@@ -188,6 +188,7 @@ function generateRootIndex(branches) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 const branches = fs.readdirSync(pagesDir)
+  .filter((name) => !name.startsWith("."))
   .map((name) => ({ name, fullPath: path.join(pagesDir, name) }))
   .filter(({ fullPath }) => isDirectory(fullPath) && !isPlaywrightReport(fullPath))
   .sort((a, b) => mtime(b.fullPath) - mtime(a.fullPath));
