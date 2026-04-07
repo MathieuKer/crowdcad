@@ -1,54 +1,61 @@
 #!/usr/bin/env node
 
 /**
- * Scans the gh-pages output directory for Playwright report folders
- * structured as <branch>/<sha>/index.html and generates a root index.html
- * listing all reports, sorted by most recent first.
+ * Generates index.html files for navigation layers only (root + branch level).
+ * Playwright report folders already have their own index.html and are left untouched.
  *
- * Usage: node .github/scripts/generate-index.js <gh-pages-dir> <base-url>
- * Example: node .github/scripts/generate-index.js ./report https://org.github.io/repo
+ * Expected structure:
+ *   <pages-dir>/
+ *     <branch>/
+ *       <sha>/          ← Playwright report (skipped — already has index.html)
+ *
+ * Generated files:
+ *   <pages-dir>/index.html           ← lists all branches
+ *   <pages-dir>/<branch>/index.html  ← lists all commits for that branch
+ *
+ * Usage: node generate-index.js <pages-dir> <base-url>
+ * Example: node generate-index.js ./report https://org.github.io/repo
  */
 
-const fs = require("fs");
+const fs   = require("fs");
 const path = require("path");
 
 const [pagesDir, baseUrl] = process.argv.slice(2);
 
 if (!pagesDir || !baseUrl) {
-  console.error("Usage: generate-index.js <gh-pages-dir> <base-url>");
+  console.error("Usage: generate-index.js <pages-dir> <base-url>");
   process.exit(1);
 }
 
-all = fs.readdirSync(pagesDir, { recursive: true, withFileTypes: true })
-  .filter((result) => result.isDirectory() && result.parentPath.split("/").length <= 2)
-  .map((result) => path.join(result.parentPath, result.name))
-  .filter((result) => fs.readdirSync(result, { withFileTypes: true }).filter((r) => r.isDirectory()).length)
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-if (all.length) {
-  all.splice(0, 0, pagesDir);
+function isDirectory(p) {
+  return fs.existsSync(p) && fs.statSync(p).isDirectory();
 }
 
-for (indexPath of all) {
-  entities = fs.readdirSync(indexPath, { withFileTypes: true })
-    .filter((result) => result.name !== "index.html")
+/** Returns true if the folder is a Playwright report (has its own index.html) */
+function isPlaywrightReport(p) {
+  return fs.existsSync(path.join(p, "index.html"));
+}
 
-  const buildUrl = (entity) => path.join(baseUrl, entity.parentPath, entity.name);
-  const rows = entities
-    .map(
-      (entity) => `
-      <tr>
-        <td>${entity.name}</td>
-        <td><a href="${buildUrl(entity)}/" target="_blank">Get In →</a></td>
-      </tr>`
-    )
-    .join("\n");
+function mtime(p) {
+  return fs.statSync(p).mtimeMs;
+}
 
-  const html = `<!DOCTYPE html>
+function writeFile(filePath, content) {
+  fs.writeFileSync(filePath, content, "utf8");
+  console.log(`✅ Written → ${filePath}`);
+}
+
+// ── HTML templates ────────────────────────────────────────────────────────────
+
+function layout({ title, breadcrumbs, content }) {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Playwright Reports</title>
+  <title>${title}</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -57,9 +64,12 @@ for (indexPath of all) {
       margin: 48px auto;
       padding: 0 24px;
       color: #1f2328;
-      background: #ffffff;
     }
-    h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 4px; }
+    nav { font-size: 0.85rem; color: #6b7280; margin-bottom: 24px; }
+    nav a { color: #2563eb; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    nav span { margin: 0 6px; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 4px; }
     p.subtitle { color: #6b7280; font-size: 0.875rem; margin: 0 0 24px; }
     table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
     th {
@@ -76,29 +86,117 @@ for (indexPath of all) {
     tr:hover td { background: #f9fafb; }
     a { color: #2563eb; text-decoration: none; }
     a:hover { text-decoration: underline; }
-    .sha { font-family: ui-monospace, monospace; color: #6b7280; }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.8rem; color: #6b7280; }
     .empty { text-align: center; padding: 40px; color: #9ca3af; }
   </style>
 </head>
 <body>
-  <h1>📊 Playwright Test Reports</h1>
-  <p class="subtitle">${entities.length} report${entities.length !== 1 ? "s" : ""} — most recent first</p>
+  <nav>${breadcrumbs}</nav>
+  ${content}
+</body>
+</html>`;
+}
+
+function breadcrumb(items) {
+  return items
+    .map(({ label, href }, i) =>
+      i < items.length - 1
+        ? `<a href="${href}">${label}</a><span>/</span>`
+        : `<span>${label}</span>`
+    )
+    .join("");
+}
+
+// ── Branch-level index: lists all commit SHAs for a given branch ──────────────
+
+function generateBranchIndex(branchDir, branchName) {
+  const entries = fs.readdirSync(branchDir)
+    .map((sha) => ({ sha, fullPath: path.join(branchDir, sha) }))
+    .filter(({ fullPath }) => isDirectory(fullPath) && isPlaywrightReport(fullPath))
+    .sort((a, b) => mtime(b.fullPath) - mtime(a.fullPath)); // newest first
+
+  const rows = entries.length
+    ? entries.map(({ sha }) => `
+      <tr>
+        <td class="mono">${sha}</td>
+        <td><a href="${baseUrl}/${branchName}/${sha}/">View report →</a></td>
+      </tr>`).join("\n")
+    : `<tr><td colspan="2" class="empty">No reports yet.</td></tr>`;
+
+  const content = `
+  <h1>🌿 ${branchName}</h1>
+  <p class="subtitle">${entries.length} report${entries.length !== 1 ? "s" : ""} — most recent first</p>
   <table>
     <thead>
       <tr>
-        <th>Folder</th>
-        <th>Get In</th>
+        <th>Commit</th>
+        <th>Report</th>
       </tr>
     </thead>
-    <tbody>
-      ${entities.length ? rows : '<tr><td colspan="3" class="empty">No reports yet.</td></tr>'}
-    </tbody>
-  </table>
-</body>
-</html>
-`;
+    <tbody>${rows}</tbody>
+  </table>`;
 
-  const outPath = path.join(indexPath, "index.html");
-  fs.writeFileSync(outPath, html, "utf8");
-  console.log(`✅ index.html written → ${outPath} (${entities.length} entities)`);
+  writeFile(
+    path.join(branchDir, "index.html"),
+    layout({
+      title: `${branchName} — Playwright Reports`,
+      breadcrumbs: breadcrumb([
+        { label: "Reports", href: `${baseUrl}/` },
+        { label: branchName, href: "#" },
+      ]),
+      content,
+    })
+  );
+
+  return entries.length;
 }
+
+// ── Root index: lists all branches ───────────────────────────────────────────
+
+function generateRootIndex(branches) {
+  const rows = branches.length
+    ? branches.map(({ name, count }) => `
+      <tr>
+        <td><a href="${baseUrl}/${name}/">${name}</a></td>
+        <td class="mono">${count} report${count !== 1 ? "s" : ""}</td>
+      </tr>`).join("\n")
+    : `<tr><td colspan="2" class="empty">No branches yet.</td></tr>`;
+
+  const content = `
+  <h1>📊 Playwright Reports</h1>
+  <p class="subtitle">${branches.length} branch${branches.length !== 1 ? "es" : ""}</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Branch</th>
+        <th>Reports</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+
+  writeFile(
+    path.join(pagesDir, "index.html"),
+    layout({
+      title: "Playwright Reports",
+      breadcrumbs: breadcrumb([{ label: "Reports", href: "#" }]),
+      content,
+    })
+  );
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
+
+const branches = fs.readdirSync(pagesDir)
+  .map((name) => ({ name, fullPath: path.join(pagesDir, name) }))
+  .filter(({ fullPath }) => isDirectory(fullPath) && !isPlaywrightReport(fullPath))
+  .sort((a, b) => mtime(b.fullPath) - mtime(a.fullPath));
+
+const result = branches.map(({ name, fullPath }) => ({
+  name,
+  count: generateBranchIndex(fullPath, name),
+}));
+
+generateRootIndex(result);
+
+console.log(`\n🎉 Done — ${result.length} branch index(es) generated`);
