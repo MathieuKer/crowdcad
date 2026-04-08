@@ -69,6 +69,12 @@ Then('I should see the text {string}', async ({ page }, text: string) => {
   await expect(page.getByText(text)).toBeVisible();
 });
 
+Then('I should see the logged in user email', async ({ page }) => {
+  const email = process.env.E2E_TEST_EMAIL;
+  if (!email) throw new Error('E2E_TEST_EMAIL is not set');
+  await expect(page.getByText(email)).toBeVisible();
+});
+
 Then('I should not see a {string} button', async ({ page }, name: string) => {
   await expect(page.getByRole('button', { name })).not.toBeVisible();
 });
