@@ -104,10 +104,10 @@ jobs:
           retention-days: 1
 
   publish-report:
-    name: Publish report to GitHub Pages
+    name: Publish failed report to GitHub Pages
     runs-on: ubuntu-latest
     needs: [set-env, test]
-    if: "success() || needs.test.result == 'failure'"
+    if: needs.test.result == 'failure'
  
     steps:
       - uses: actions/checkout@v4
