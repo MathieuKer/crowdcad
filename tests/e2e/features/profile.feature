@@ -14,7 +14,7 @@ Feature: Profile page
 
   Scenario: Account tab is selected by default and shows user email
     Then the "Account" tab should be selected
-    And I should see the text "test@crowdcad.local"
+    And I should see the logged in user email
 
   Scenario: Account tab shows Security section with password fields
     Then I should see the heading "Security"
