@@ -52,3 +52,6 @@ Thumbs.db
 /playwright-report/
 /test-results/
 /.features-gen/
+
+*-debug.log
+typescript
