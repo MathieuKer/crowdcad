@@ -18,7 +18,7 @@ permissions:
 jobs:
   set-env:
     name: Resolve environment
-    runs-on: ubuntu-latests
+    runs-on: ubuntu-latest
     outputs:
       environment: ${{ steps.set-env.outputs.environment }}
       base-url: ${{ steps.set-prefix.outputs.base-url }}
