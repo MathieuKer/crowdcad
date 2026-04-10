@@ -132,7 +132,7 @@ export default function AddSupervisorModal({
               >
                 {roles.map((role) => (
                   <SelectItem key={role.name} aria-label={role.fullName} textValue={role.fullName}>
-                    {role.name} - {role.fullName}
+                    {role.name}
                   </SelectItem>
                 ))}
               </Select>

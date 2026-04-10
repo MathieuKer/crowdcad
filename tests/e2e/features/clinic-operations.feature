@@ -22,7 +22,7 @@ Feature: Clinic operations on the dispatch board
 
   Scenario: Delivered call appears in clinic tracking
     When I open the add team modal
-    And I create a team named "ClinicTeam" with a member "Alex Test" certified as "EMT-P"
+    And I create a team named "ClinicTeam" with a member "Alex Test" certified as "FR"
     And I open the quick call modal
     And I log a call assigned to team "ClinicTeam" at location "Stage" with complaint "Syncope"
     And I change team "ClinicTeam" status on the call to "Transporting"
@@ -32,7 +32,7 @@ Feature: Clinic operations on the dispatch board
 
   Scenario: Clinic outcome can be set to Discharged
     When I open the add team modal
-    And I create a team named "ClinicTeam2" with a member "Beth Test" certified as "RN"
+    And I create a team named "ClinicTeam2" with a member "Beth Test" certified as "FR"
     And I open the quick call modal
     And I log a call assigned to team "ClinicTeam2" at location "VIP" with complaint "Laceration"
     And I change team "ClinicTeam2" status on the call to "Transporting"
@@ -43,7 +43,7 @@ Feature: Clinic operations on the dispatch board
 
   Scenario: Clinic outcome can be set to AMA
     When I open the add team modal
-    And I create a team named "ClinicTeam3" with a member "Carl Test" certified as "EMT-B"
+    And I create a team named "ClinicTeam3" with a member "Carl Test" certified as "FA"
     And I open the quick call modal
     And I log a call assigned to team "ClinicTeam3" at location "Gate A" with complaint "Nausea"
     And I change team "ClinicTeam3" status on the call to "Transporting"
