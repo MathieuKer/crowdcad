@@ -46,6 +46,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@playwright/test": "^1.58.2",
+    "@types/kill-port": "^2.0.3",
     "@types/lodash.isequal": "^4.5.8",
     "@types/node": "20.19.1",
     "@types/nodemailer": "^7.0.1",
@@ -59,6 +60,7 @@
     "eslint": "^9",
     "eslint-config-next": "^15.5.7",
     "firebase-tools": "^15.8.0",
+    "kill-port": "^2.0.1",
     "playwright-bdd": "^8.4.2",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
