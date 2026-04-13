@@ -61,7 +61,7 @@ export async function seedDatabase(projectId: string) {
     }
 }
 
-export async function addUser(projectId: string, username: string, password: string) {
+export async function addUser(projectId: string, { username, password }: { username: string; password: string }) {
     const AUTH_EMULATOR = (config.emulators as Emulator)?.auth;
     const AUTH_EMULATOR_HOST = AUTH_EMULATOR?.host || 'localhost'
     const AUTH_EMULATOR_PORT = AUTH_EMULATOR?.port || 9099;

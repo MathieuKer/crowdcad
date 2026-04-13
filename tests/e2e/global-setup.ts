@@ -5,7 +5,7 @@ import { addUser, seedDatabase } from './fixtures/seed-db';
 // Load test env vars so E2E_TEST_EMAIL and E2E_TEST_PASSWORD are available
 dotenv.config({ path: path.join(__dirname, '../../.env.test.local') });
 
-const EMULATOR_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+const EMULATOR_PROJECT_ID = "demo-crowdcad";
 
 /**
  * Global setup: runs once before all tests, after webServer is ready.
@@ -28,7 +28,7 @@ async function globalSetup() {
     );
   }
 
-  await addUser(EMULATOR_PROJECT_ID, email, password);
+  await addUser(EMULATOR_PROJECT_ID, { username: email, password });
   await seedDatabase(EMULATOR_PROJECT_ID);
 }
 
