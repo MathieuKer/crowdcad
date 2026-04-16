@@ -1,15 +1,23 @@
 import killPort from 'kill-port';
-import config from '../../firebase.json';
+import { db, auth } from './helpers/admin-firebase';
+import { getConfig } from './helpers/read-firebase-emulator-config';
 
-type Emulator = {
-    firestore?: {
-        host?: string;
-        port?: number;
-    }
-};
-
-const FIRESTORE_EMULATOR_PORT = (config.emulators as Emulator)?.firestore?.port || 8080;
 
 export default async function globalTeardown() {
-    await killPort(FIRESTORE_EMULATOR_PORT);
+
+    // Wipe all users - Max 1000
+    const result = await auth.listUsers();
+    const uids = result.users.map(user => user.uid);
+
+    if (uids.length) {
+        await auth.deleteUsers(uids);
+    }
+
+    // Wipe all collections
+    const collections = await db.listCollections();
+    await Promise.all(collections.map(col => db.recursiveDelete(col)));
+
+    // Kill emulator port
+    const { port } = getConfig("firestore")
+    await killPort(port);
 }

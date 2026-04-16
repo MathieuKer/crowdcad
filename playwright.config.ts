@@ -76,7 +76,7 @@ export default defineConfig({
       },
       url: NEXT_DEV_URL,
       reuseExistingServer: !process.env.CI,
-      timeout: 300_000,   // build + start can take up to 5 min
+      timeout: 300_000,
       stdout: 'pipe',
       stderr: 'pipe',
     },
