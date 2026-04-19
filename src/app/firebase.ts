@@ -21,7 +21,7 @@ const requiredKeys = ['apiKey', 'projectId', 'authDomain', 'storageBucket'];
 const missing = requiredKeys.filter((k) => !firebaseConfig[k]);
 if (missing.length) {
   const msg = `Missing required Firebase env vars: ${missing.join(', ')}. Copy .env.example to .env.local and fill in your values.`;
-  if (typeof globalThis.window !== 'undefined' && process.env.NODE_ENV === 'production') {
+  if (typeof globalThis.window !== 'undefined' && process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_BACKEND !== 'pocketbase') {
     throw new Error(msg);
   } else {
     console.warn(msg);
@@ -31,18 +31,35 @@ if (missing.length) {
 // Initialize Firebase (guard against duplicate initialization in SSR)
 let app: FirebaseApp;
 if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
+  // If we are using pocketbase, we mock initialization to prevent crashes from stray imports
+  if (missing.length && process.env.NEXT_PUBLIC_BACKEND === 'pocketbase') {
+    app = {} as FirebaseApp;
+  } else {
+    app = initializeApp(firebaseConfig);
+  }
 } else {
   app = getApp();
 }
 
-export const db = getFirestore(app);
+export const db = (missing.length && process.env.NEXT_PUBLIC_BACKEND === 'pocketbase')
+  ? new Proxy({} as ReturnType<typeof getFirestore>, {
+      get(_, prop) {
+        if (prop === 'type') return 'firestore';
+        return () => { throw new Error('Firebase DB is bypassed because pocketbase is active.'); };
+      }
+    })
+  : getFirestore(app);
 
 // In test/emulator mode, use actual window.localStorage persistence so that
 // Playwright's storageState() captures the Firebase auth token. Firebase v11+
 // defaults to IndexedDB (firebaseLocalStorageDb), which storageState does NOT
 // capture. The try/catch handles hot-reload re-evaluation without throwing.
 function createAuth() {
+  if (missing.length && process.env.NEXT_PUBLIC_BACKEND === 'pocketbase') {
+    return new Proxy({} as ReturnType<typeof getAuth>, {
+      get() { return () => { throw new Error('Firebase Auth bypassed'); }; }
+    });
+  }
   if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
     try {
       return initializeAuth(app, { persistence: browserLocalPersistence });

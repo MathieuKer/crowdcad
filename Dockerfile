@@ -26,6 +26,8 @@ ARG FB_STORAGE_BUCKET
 ARG FB_MSG_SENDER_ID
 ARG FB_APP_ID
 ARG FB_MEASURE_ID
+ARG NEXT_PUBLIC_BACKEND
+ARG NEXT_PUBLIC_POCKETBASE_URL
 
 # Next.js telemetry is disabled during the build in the standalone mode usually, but just in case
 ENV NEXT_TELEMETRY_DISABLED 1
@@ -38,6 +40,8 @@ RUN echo "NEXT_PUBLIC_FIREBASE_API_KEY=$FB_API" >> .env.production && \
     echo "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$FB_MSG_SENDER_ID" >> .env.production && \
     echo "NEXT_PUBLIC_FIREBASE_APP_ID=$FB_APP_ID" >> .env.production && \
     echo "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$FB_MEASURE_ID" >> .env.production && \
+    echo "NEXT_PUBLIC_BACKEND=$NEXT_PUBLIC_BACKEND" >> .env.production && \
+    echo "NEXT_PUBLIC_POCKETBASE_URL=$NEXT_PUBLIC_POCKETBASE_URL" >> .env.production && \
     npm run build
 
 # Production image, copy all the files and run next

@@ -24,11 +24,49 @@ CrowdCAD is an open-source, browser-based Computer-Aided Dispatch (CAD) system f
 
 #### Quickstart
 
-**With Docker (Recommended)**
+**With Docker + PocketBase (Recommended for local/LAN, no cloud account required)**
+
+1. Copy and configure the environment file:
+```bash
+cp .env.example .env.local
+```
+
+In `.env.local`, set the following values:
+```env
+NEXT_PUBLIC_BACKEND=pocketbase
+NEXT_PUBLIC_POCKETBASE_URL=http://127.0.0.1:8090
+PB_URL=http://127.0.0.1:8090
+PB_ADMIN_EMAIL=admin@example.com
+PB_ADMIN_PASSWORD=YourPassword!
+```
+
+2. Build and start the containers:
+```bash
+docker compose --env-file .env.local up -d --build
+```
+
+3. Create the PocketBase superadmin (first time only — skippable on subsequent runs since data is persisted in `.pb-data/`):
+```bash
+docker exec pocketbase /pb/pocketbase superuser upsert admin@example.com YourPassword!
+```
+> Use the same email and password as defined in `PB_ADMIN_EMAIL` and `PB_ADMIN_PASSWORD` in your `.env.local`.
+
+4. Create the required collections (first time only):
+```bash
+node scripts/setup-pocketbase.js
+```
+
+5. The app is available at `http://localhost:3000` and the PocketBase admin UI at `http://localhost:8090/_/`.
+
+To stop the stack: `docker compose down`. Your data is preserved in `.pb-data/` and will be available on the next `docker compose up`.
+
+**With Docker + Firebase**
 
 1. Secure your environment variables (see Firebase setup below):
 ```bash
 cp .env.example .env.local
+# Edit .env.local and paste values from your Firebase project settings
+# Leave NEXT_PUBLIC_BACKEND unset or set it to "firebase"
 ```
 
 2. Build and run the container:
