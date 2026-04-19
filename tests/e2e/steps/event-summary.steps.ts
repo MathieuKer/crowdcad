@@ -36,7 +36,7 @@ Given('I have ended an event and am on the summary page', async ({ page }) => {
   await dialog.getByLabel('Team name').fill('SummaryTeam');
   await dialog.getByLabel('Member name').fill('Test User');
   await dialog.locator('[aria-label="Certification"]').click();
-  await page.locator('[role="listbox"]').getByText('EMT-B', { exact: true }).click();
+  await page.locator('[role="listbox"]').getByText('FA', { exact: true }).click();
   await dialog.getByRole('button', { name: 'Add member' }).click();
   await dialog.getByRole('button', { name: 'Create Team' }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();

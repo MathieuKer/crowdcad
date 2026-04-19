@@ -57,7 +57,6 @@ export default defineConfig({
   webServer: [
     {
       command: 'npx firebase emulators:start --only auth,firestore,storage --project demo-crowdcad',
-      url: 'http://localhost:4400',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       stdout: 'pipe',
@@ -77,7 +76,7 @@ export default defineConfig({
       },
       url: NEXT_DEV_URL,
       reuseExistingServer: !process.env.CI,
-      timeout: 300_000,   // build + start can take up to 5 min
+      timeout: 300_000,
       stdout: 'pipe',
       stderr: 'pipe',
     },
@@ -112,4 +111,5 @@ export default defineConfig({
   ],
 
   globalSetup: './tests/e2e/global-setup.ts',
+  globalTeardown: './tests/e2e/global-teardown.ts',
 });
