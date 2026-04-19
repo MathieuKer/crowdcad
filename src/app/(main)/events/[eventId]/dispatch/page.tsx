@@ -193,7 +193,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
   const [isTeamLead, setIsTeamLead] = useState(false);
   const [currentMembers, setCurrentMembers] = useState<{ name: string, cert: string, lead: boolean }[]>([]);
   const [editTeamOriginalName, setEditTeamOriginalName] = useState<string | null>(null);
-  const LICENSES = ['CPR', 'EMT-B', 'EMT-A', 'EMT-P', 'RN', 'MD/DO'];
+  const LICENSES = ['FA', 'FR', 'CPR', 'EMT-B', 'EMT-A', 'EMT-P', 'RN', 'MD/DO'];
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -2878,7 +2878,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
         addMember={addMember}
         currentMembers={currentMembers}
         removeMember={removeMember}
-        LICENSES={LICENSES}
+        roles={LICENSES.map(name => ({ name, fullName: name }))}
       />
       <AddTeamModal
         isOpen={showEditTeamModal}
@@ -2896,7 +2896,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
         addMember={addMember}
         currentMembers={currentMembers}
         removeMember={removeMember}
-        LICENSES={LICENSES}
+        roles={LICENSES.map(name => ({ name, fullName: name }))}
       />
       <AddSupervisorModal
         isOpen={showAddSupervisorModal}
@@ -2909,7 +2909,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
         setMemberName={setMemberName}
         memberCert={memberCert}
         setMemberCert={setMemberCert}
-        LICENSES={LICENSES}
+        roles={LICENSES.map(name => ({ name, fullName: name }))}
       />
       <AddSupervisorModal
         isOpen={showEditSupervisorModal}
@@ -2922,7 +2922,7 @@ export default function DispatchPage({ params }: DispatchPageProps) {
         setMemberName={setMemberName}
         memberCert={memberCert}
         setMemberCert={setMemberCert}
-        LICENSES={LICENSES}
+        roles={LICENSES.map(name => ({ name, fullName: name }))}
       />
       <DebugModal 
         isOpen={showDebugModal} 

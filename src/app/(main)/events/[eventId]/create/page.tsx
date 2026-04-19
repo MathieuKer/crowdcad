@@ -15,7 +15,7 @@ import AddSupervisorModal from '@/components/modals/event/addsupervisormodal';
 import LoadingScreen from '@/components/ui/loading-screen';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
-const LICENSES = ['CPR', 'EMT-B', 'EMT-A', 'EMT-P', 'RN', 'MD/DO'];
+const LICENSES = ['FA', 'FR', 'CPR', 'EMT-B', 'EMT-A', 'EMT-P', 'RN', 'MD/DO'];
 
 // Helper to check if Post is an object with name property
 const isPostObject = (post: Post): post is { name: string; x: number | null; y: number | null } => {
@@ -1267,7 +1267,7 @@ export default function EventCreation() {
         addMember={addMember}
         currentMembers={currentMembers}
         removeMember={removeMember}
-        LICENSES={LICENSES}
+        roles={LICENSES.map(name => ({ name, fullName: name }))}
       />
 
       <AddSupervisorModal
@@ -1283,7 +1283,7 @@ export default function EventCreation() {
         setMemberName={setSamMemberName}
         memberCert={samCert}
         setMemberCert={setSamCert}
-        LICENSES={LICENSES}
+        roles={LICENSES.map(name => ({ name, fullName: name }))}
       />
     </main>
   );

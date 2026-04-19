@@ -59,6 +59,7 @@ Thumbs.db
 # PocketBase binary (root-level only, so src/lib/services/pocketbase/ is not affected)
 /pocketbase.exe
 /pocketbase
+.pb-data/
 
 # Claude Code
 .claude/

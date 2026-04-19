@@ -1,7 +1,7 @@
 import { pb } from './client';
 import type { IDbService } from '../IDbService';
 import type { DocSnapshot, QueryConstraint, TransactionContext, Unsubscribe } from '../types';
-import { isArrayUnion, isArrayRemove, ServiceError } from '../types';
+import { isArrayUnion, isArrayRemove } from '../types';
 import { toPbServiceError } from './utils';
 
 function toSnapshot<T>(record: Record<string, unknown>): DocSnapshot<T> {
