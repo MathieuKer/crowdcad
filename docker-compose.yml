@@ -11,6 +11,8 @@ services:
         FB_MSG_SENDER_ID: ${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}
         FB_APP_ID: ${NEXT_PUBLIC_FIREBASE_APP_ID}
         FB_MEASURE_ID: ${NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID}
+        NEXT_PUBLIC_BACKEND: ${NEXT_PUBLIC_BACKEND}
+        NEXT_PUBLIC_POCKETBASE_URL: ${NEXT_PUBLIC_POCKETBASE_URL}
     ports:
       - "3000:3000"
     environment:
@@ -18,3 +20,14 @@ services:
     env_file:
       - .env.local
     restart: unless-stopped
+
+  pocketbase:
+    build:
+      context: .
+      dockerfile: Dockerfile.pocketbase
+    container_name: pocketbase
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./.pb-data:/pb/pb_data

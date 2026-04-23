@@ -14,7 +14,8 @@ CrowdCAD is an open-source, browser-based Computer-Aided Dispatch (CAD) system f
 - **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **Component patterns:** [docs/COMPONENTS.md](docs/COMPONENTS.md)
 - **Firebase & setup:** [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md)
-- **Self-hosting:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- **Self-hosting (Firebase):** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- **Self-hosting (PocketBase):** see [PocketBase section](#pocketbase-self-hosted--lan) below
 - **Contributing guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
 - **Code of Conduct:** [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 - **Changelog / Releases:** [CHANGELOG.md](CHANGELOG.md)
@@ -23,11 +24,49 @@ CrowdCAD is an open-source, browser-based Computer-Aided Dispatch (CAD) system f
 
 #### Quickstart
 
-**With Docker (Recommended)**
+**With Docker + PocketBase (Recommended for local/LAN, no cloud account required)**
+
+1. Copy and configure the environment file:
+```bash
+cp .env.example .env.local
+```
+
+In `.env.local`, set the following values:
+```env
+NEXT_PUBLIC_BACKEND=pocketbase
+NEXT_PUBLIC_POCKETBASE_URL=http://127.0.0.1:8090
+PB_URL=http://127.0.0.1:8090
+PB_ADMIN_EMAIL=admin@example.com
+PB_ADMIN_PASSWORD=YourPassword!
+```
+
+2. Build and start the containers:
+```bash
+docker compose --env-file .env.local up -d --build
+```
+
+3. Create the PocketBase superadmin (first time only — skippable on subsequent runs since data is persisted in `.pb-data/`):
+```bash
+docker exec pocketbase /pb/pocketbase superuser upsert admin@example.com YourPassword!
+```
+> Use the same email and password as defined in `PB_ADMIN_EMAIL` and `PB_ADMIN_PASSWORD` in your `.env.local`.
+
+4. Create the required collections (first time only):
+```bash
+node scripts/setup-pocketbase.js
+```
+
+5. The app is available at `http://localhost:3000` and the PocketBase admin UI at `http://localhost:8090/_/`.
+
+To stop the stack: `docker compose down`. Your data is preserved in `.pb-data/` and will be available on the next `docker compose up`.
+
+**With Docker + Firebase**
 
 1. Secure your environment variables (see Firebase setup below):
 ```bash
 cp .env.example .env.local
+# Edit .env.local and paste values from your Firebase project settings
+# Leave NEXT_PUBLIC_BACKEND unset or set it to "firebase"
 ```
 
 2. Build and run the container:
@@ -72,6 +111,66 @@ cp .env.example .env.local
 # edit .env.local and paste values from your Firebase project settings
 ```
 
+
+#### PocketBase (self-hosted / LAN)
+
+PocketBase is the recommended backend for local or LAN deployments — no cloud account required and all data stays on your machine.
+
+**1. Download PocketBase**
+
+Download the binary for your platform from [pocketbase.io/docs](https://pocketbase.io/docs) and place it at the root of the project (or anywhere — adjust the path accordingly).
+
+**2. Create the superadmin and start the server**
+
+```bash
+# Create (or update) the superadmin account
+./pocketbase superuser upsert admin@example.com YourPassword!
+
+# Start PocketBase accessible on the whole LAN (port 8090)
+./pocketbase serve --http=0.0.0.0:8090
+```
+
+The admin UI is available at `http://<LAN-IP>:8090/_/`.
+
+**3. Set environment variables**
+
+```bash
+cp .env.example .env.local
+```
+
+In `.env.local`:
+
+```env
+NEXT_PUBLIC_BACKEND=pocketbase
+NEXT_PUBLIC_POCKETBASE_URL=http://192.168.x.x:8090   # LAN IP of the machine running PocketBase
+DISABLE_TELEMETRY=true
+
+# Used by the setup script (not read by the app)
+PB_URL=http://192.168.x.x:8090
+PB_ADMIN_EMAIL=admin@example.com
+PB_ADMIN_PASSWORD=YourPassword!
+```
+
+Use the LAN IP address (not `localhost`) so every device on the network can connect.
+
+**4. Create collections**
+
+Run the setup script once after PocketBase starts. It creates all required collections and is fully idempotent (safe to run multiple times):
+
+```bash
+node scripts/setup-pocketbase.js
+```
+
+**5. Run the app**
+
+```bash
+npm install
+npm run dev
+# or for production:
+npm run build && npm start
+```
+
+The app will be available at `http://localhost:3000` and will communicate with PocketBase via the URL you configured.
 
 #### Testing
 
